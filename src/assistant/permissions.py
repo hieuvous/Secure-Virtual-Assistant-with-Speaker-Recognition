@@ -1,0 +1,16 @@
+PERMISSIONS = {
+    "GET_TIME": "GENERAL",
+    "GET_DATE": "GENERAL",
+    "GET_COURSE_ROOM": "GENERAL",
+    "GET_SCHEDULE": "IDENTIFICATION",
+    "GET_TASKS": "IDENTIFICATION",
+    "READ_PRIVATE_NOTE": "VERIFICATION",
+    "ADD_TASK": "VERIFICATION",
+    "DELETE_TASK": "VERIFICATION",
+    "UPDATE_SCHEDULE": "VERIFICATION",
+    "UNKNOWN": "GENERAL",
+}
+
+
+def get_auth_requirement(intent: str) -> str:
+    return PERMISSIONS.get(intent, "GENERAL")

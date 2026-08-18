@@ -1,0 +1,18 @@
+project:
+  name: Secure Student Virtual Assistant
+
+speaker:
+  model_source: speechbrain/spkrec-ecapa-voxceleb
+  sample_rate: 16000
+  local_checkpoint: models/finetuned_ecapa.pt
+  model_cache_dir: models/pretrained_ecapa
+
+asr:
+  model_size: small
+  device: cpu
+  compute_type: int8
+  language: vi
+  beam_size: 5
+
+database:
+  path: data/app.db

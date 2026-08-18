@@ -1,0 +1,6 @@
+{
+  "sv_threshold": 0.25,
+  "sid_threshold": 0.25,
+  "status": "PROVISIONAL_ONLY",
+  "note": "Replace using development data. Do not report these as final thresholds."
+}
