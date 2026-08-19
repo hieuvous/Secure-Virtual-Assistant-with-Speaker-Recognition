@@ -92,15 +92,33 @@ def main():
                 "falling back to scanned folders. Check dataset layout."
             )
 
-    needed = args.train_speakers + args.dev_speakers
-    if len(eligible) < needed:
+    # A training speaker needs two retained utterances (one train, one val).
+    # Development speakers only need one. Apply this before sampling so the
+    # requested counts are preserved instead of silently skipping speakers.
+    train_eligible = [
+        speaker_id for speaker_id in eligible
+        if min(len(groups[speaker_id]), args.max_utts) >= 2
+    ]
+    dev_eligible = [
+        speaker_id for speaker_id in eligible
+        if min(len(groups[speaker_id]), args.max_utts) >= 1
+    ]
+    if len(train_eligible) < args.train_speakers:
         raise RuntimeError(
-            f"Need at least {needed} eligible speakers but found {len(eligible)}."
+            f"Need at least {args.train_speakers} train speakers with at least 2 audio files "
+            f"but found {len(train_eligible)}."
         )
 
-    rng.shuffle(eligible)
-    train_spks = eligible[: args.train_speakers]
-    dev_spks = eligible[args.train_speakers : needed]
+    rng.shuffle(train_eligible)
+    train_spks = train_eligible[: args.train_speakers]
+    dev_eligible = [speaker_id for speaker_id in dev_eligible if speaker_id not in train_spks]
+    if len(dev_eligible) < args.dev_speakers:
+        raise RuntimeError(
+            f"Need at least {args.dev_speakers} speaker-disjoint dev speakers with at least 1 audio file "
+            f"but found {len(dev_eligible)}."
+        )
+    rng.shuffle(dev_eligible)
+    dev_spks = dev_eligible[: args.dev_speakers]
 
     train_rows, val_rows, dev_rows = [], [], []
 
@@ -108,8 +126,6 @@ def main():
         utts = groups[spk][:]
         rng.shuffle(utts)
         utts = utts[: args.max_utts]
-        if len(utts) < 2:
-            continue
         n_val = max(1, round(len(utts) * args.val_ratio))
         val_utts = utts[:n_val]
         train_utts = utts[n_val:]
