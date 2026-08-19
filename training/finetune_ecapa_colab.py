@@ -39,6 +39,10 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--patience", type=int, default=3,
+                        help="Stop after this many validation epochs without improvement.")
+    parser.add_argument("--min-delta", type=float, default=0.001,
+                        help="Minimum validation-loss decrease that counts as improvement.")
     parser.add_argument("--chunk-seconds", type=float, default=3.0)
     parser.add_argument("--margin", type=float, default=0.2)
     parser.add_argument("--scale", type=float, default=30.0)
@@ -94,9 +98,12 @@ class AAMSoftmaxHead(nn.Module):
         self.threshold = math.cos(math.pi - self.margin)
         self.mm = math.sin(math.pi - self.margin) * self.margin
 
+    def classification_logits(self, embeddings):
+        """Ordinary normalized cosine logits for classification accuracy."""
+        return F.linear(F.normalize(embeddings, dim=1), F.normalize(self.weight, dim=1))
+
     def forward(self, embeddings, labels):
-        cosine = F.linear(F.normalize(embeddings, dim=1), F.normalize(self.weight, dim=1))
-        cosine = cosine.clamp(-1 + 1e-7, 1 - 1e-7)
+        cosine = self.classification_logits(embeddings).clamp(-1 + 1e-7, 1 - 1e-7)
         sine = torch.sqrt(torch.clamp(1.0 - cosine.pow(2), min=1e-7))
         phi = cosine * self.cos_m - sine * self.sin_m
         phi = torch.where(cosine > self.threshold, phi, cosine - self.mm)
@@ -125,6 +132,8 @@ def run_epoch(loader, pretrained, head, optimizer, device, training):
             embeddings = get_embeddings(pretrained, wavs, torch.ones(len(wavs), device=device))
             logits = head(embeddings, labels)
             loss = F.cross_entropy(logits, labels)
+            with torch.no_grad():
+                accuracy_logits = head.classification_logits(embeddings)
             if training:
                 optimizer.zero_grad(set_to_none=True)
                 loss.backward()
@@ -132,18 +141,22 @@ def run_epoch(loader, pretrained, head, optimizer, device, training):
                     list(pretrained.mods.embedding_model.parameters()) + list(head.parameters()), 5.0)
                 optimizer.step()
             total_loss += loss.item() * len(wavs)
-            total_correct += (logits.argmax(1) == labels).sum().item()
+            total_correct += (accuracy_logits.argmax(1) == labels).sum().item()
             total += len(wavs)
     return {"loss": total_loss / max(total, 1), "accuracy": total_correct / max(total, 1)}
 
 
-def checkpoint_payload(epoch, pretrained, head, optimizer, best_val_loss, label_map, args, embedding_dim):
+def checkpoint_payload(
+    epoch, pretrained, head, optimizer, best_val_loss, epochs_without_improvement,
+    label_map, args, embedding_dim,
+):
     return {
         "epoch": epoch,
         "embedding_model": pretrained.mods.embedding_model.state_dict(),
         "classification_head": head.state_dict(),
         "optimizer": optimizer.state_dict(),
         "best_val_loss": best_val_loss,
+        "epochs_without_improvement": epochs_without_improvement,
         "label_map": label_map,
         "training_args": vars(args),
         "embedding_dim": embedding_dim,
@@ -166,6 +179,10 @@ def main():
     args = parse_args()
     if args.epochs < 1:
         raise ValueError("--epochs must be at least 1")
+    if args.patience < 1:
+        raise ValueError("--patience must be at least 1")
+    if args.min_delta < 0:
+        raise ValueError("--min-delta must be non-negative")
     set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else " (CUDA unavailable; using CPU)"))
@@ -201,7 +218,7 @@ def main():
     head = AAMSoftmaxHead(embedding_dim, len(label_map), args.margin, args.scale).to(device)
     optimizer = torch.optim.Adam(list(pretrained.mods.embedding_model.parameters()) + list(head.parameters()), lr=args.lr)
 
-    start_epoch, best_val = 1, float("inf")
+    start_epoch, best_val, epochs_without_improvement = 1, float("inf"), 0
     if args.resume:
         resume = torch.load(args.resume, map_location=device, weights_only=False)
         required = {"epoch", "embedding_model", "classification_head", "optimizer", "best_val_loss", "label_map"}
@@ -213,7 +230,9 @@ def main():
         pretrained.mods.embedding_model.load_state_dict(resume["embedding_model"])
         head.load_state_dict(resume["classification_head"])
         optimizer.load_state_dict(resume["optimizer"])
-        start_epoch, best_val = int(resume["epoch"]) + 1, float(resume["best_val_loss"])
+        start_epoch = int(resume["epoch"]) + 1
+        best_val = float(resume["best_val_loss"])
+        epochs_without_improvement = int(resume.get("epochs_without_improvement", 0))
         print(f"Resumed from epoch {resume['epoch']}; continuing at epoch {start_epoch}.")
 
     history_path = checkpoint_dir / "training_history.json"
@@ -225,8 +244,9 @@ def main():
                "val_loss": val_metrics["loss"], "val_acc": val_metrics["accuracy"]}
         history.append(row)
         print(json.dumps(row, indent=2))
-        if val_metrics["loss"] < best_val:
+        if val_metrics["loss"] < best_val - args.min_delta:
             best_val = val_metrics["loss"]
+            epochs_without_improvement = 0
             best = inference_payload(epoch, pretrained, best_val, label_map, args, embedding_dim)
             torch.save(best, best_path)
             if output.resolve() != best_path.resolve():
@@ -234,12 +254,19 @@ def main():
                 print(f"Saved best model: {best_path} and {output}")
             else:
                 print(f"Saved best model: {best_path}")
+        else:
+            epochs_without_improvement += 1
         latest_checkpoint = checkpoint_payload(
-            epoch, pretrained, head, optimizer, best_val, label_map, args, embedding_dim
+            epoch, pretrained, head, optimizer, best_val, epochs_without_improvement,
+            label_map, args, embedding_dim,
         )
         torch.save(latest_checkpoint, latest_path)
         history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
         print(f"Updated resume checkpoint: {latest_path}")
+        if epochs_without_improvement >= args.patience:
+            print(f"Early stopping at epoch {epoch}: no validation improvement for "
+                  f"{epochs_without_improvement} epoch(s).")
+            break
 
 
 if __name__ == "__main__":
