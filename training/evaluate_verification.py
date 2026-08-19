@@ -24,6 +24,8 @@ def parse_args():
     p.add_argument("--max-utts-per-speaker", type=int, default=8)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--model-source", default="speechbrain/spkrec-ecapa-voxceleb")
+    p.add_argument("--cache-dir", default="./pretrained_ecapa_eval",
+                   help="SpeechBrain pretrained-model cache directory.")
     return p.parse_args()
 
 
@@ -84,10 +86,11 @@ def main():
     args = parse_args()
     rng = random.Random(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    Path(args.cache_dir).mkdir(parents=True, exist_ok=True)
 
     model = EncoderClassifier.from_hparams(
         source=args.model_source,
-        savedir="/kaggle/working/eval_pretrained_ecapa",
+        savedir=str(Path(args.cache_dir)),
         run_opts={"device": device},
     )
 
@@ -151,7 +154,9 @@ def main():
         }
     )
 
-    Path(args.output_json).write_text(
+    output_json = Path(args.output_json)
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+    output_json.write_text(
         json.dumps(metrics, indent=2), encoding="utf-8"
     )
     print(json.dumps(metrics, indent=2))
