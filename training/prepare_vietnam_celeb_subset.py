@@ -36,24 +36,30 @@ def scan_by_speaker(data_root: Path) -> dict[str, list[Path]]:
     return {k: sorted(v) for k, v in groups.items()}
 
 
+def speaker_from_train_line(raw: str) -> str | None:
+    """Extract a speaker ID from official or path-based Vietnam-Celeb list rows."""
+    tokens = raw.strip().replace("\\", "/").split()
+    if not tokens:
+        return None
+
+    # Official Vietnam-Celeb train-list format: ``id00000<TAB>00000.wav``.
+    if len(tokens) >= 2 and any(tokens[1].lower().endswith(ext) for ext in AUDIO_EXTS):
+        return tokens[0]
+
+    # Keep support for entries such as ``id00000/00000.wav``.
+    for token in reversed(tokens):
+        parts = [part for part in token.split("/") if part]
+        if len(parts) >= 2 and any(token.lower().endswith(ext) for ext in AUDIO_EXTS):
+            return parts[0]
+    return None
+
+
 def speakers_from_train_list(path: Path) -> set[str]:
-    speakers = set()
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        raw = raw.strip()
-        if not raw:
-            continue
-        # Find the token most likely to be an audio path.
-        tokens = raw.replace("\\", "/").split()
-        candidate = None
-        for tok in reversed(tokens):
-            if "/" in tok or any(tok.lower().endswith(ext) for ext in AUDIO_EXTS):
-                candidate = tok
-                break
-        candidate = candidate or tokens[-1]
-        parts = [x for x in candidate.split("/") if x]
-        if len(parts) >= 2:
-            speakers.add(parts[0])
-    return speakers
+    return {
+        speaker_id
+        for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if (speaker_id := speaker_from_train_line(raw)) is not None
+    }
 
 
 def write_csv(path: Path, rows: list[dict]):
