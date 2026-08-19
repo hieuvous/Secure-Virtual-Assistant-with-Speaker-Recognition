@@ -10,6 +10,9 @@ import argparse
 import json
 import math
 import random
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -39,6 +42,11 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--dev-csv", default=None,
+                        help="Optional dev.csv for periodic verification evaluation.")
+    parser.add_argument("--eval-every", type=int, default=5,
+                        help="Evaluate verification every N epochs when --dev-csv is set.")
+    parser.add_argument("--eval-max-utts-per-speaker", type=int, default=8)
     parser.add_argument("--patience", type=int, default=3,
                         help="Stop after this many validation epochs without improvement.")
     parser.add_argument("--min-delta", type=float, default=0.001,
@@ -148,7 +156,7 @@ def run_epoch(loader, pretrained, head, optimizer, device, training):
 
 def checkpoint_payload(
     epoch, pretrained, head, optimizer, best_val_loss, epochs_without_improvement,
-    label_map, args, embedding_dim,
+    best_eer, best_eer_epoch, label_map, args, embedding_dim,
 ):
     return {
         "epoch": epoch,
@@ -157,6 +165,8 @@ def checkpoint_payload(
         "optimizer": optimizer.state_dict(),
         "best_val_loss": best_val_loss,
         "epochs_without_improvement": epochs_without_improvement,
+        "best_eer": best_eer,
+        "best_eer_epoch": best_eer_epoch,
         "label_map": label_map,
         "training_args": vars(args),
         "embedding_dim": embedding_dim,
@@ -175,6 +185,30 @@ def inference_payload(epoch, pretrained, best_val_loss, label_map, args, embeddi
     }
 
 
+def run_verification_evaluation(epoch, pretrained, best_val_loss, label_map, args, embedding_dim):
+    """Run the standalone evaluator using temporary local files only."""
+    evaluator = Path(__file__).with_name("evaluate_verification.py")
+    with tempfile.TemporaryDirectory(prefix="ecapa_verification_") as temp_dir:
+        temp_dir = Path(temp_dir)
+        temp_model = temp_dir / "current_embedding_model.pt"
+        temp_metrics = temp_dir / "verification_metrics.json"
+        torch.save(
+            inference_payload(epoch, pretrained, best_val_loss, label_map, args, embedding_dim),
+            temp_model,
+        )
+        subprocess.run(
+            [
+                sys.executable, str(evaluator), "--dev-csv", args.dev_csv,
+                "--checkpoint", str(temp_model), "--output-json", str(temp_metrics),
+                "--cache-dir", args.cache_dir,
+                "--max-utts-per-speaker", str(args.eval_max_utts_per_speaker),
+                "--seed", str(args.seed),
+            ],
+            check=True,
+        )
+        return json.loads(temp_metrics.read_text(encoding="utf-8"))
+
+
 def main():
     args = parse_args()
     if args.epochs < 1:
@@ -183,6 +217,8 @@ def main():
         raise ValueError("--patience must be at least 1")
     if args.min_delta < 0:
         raise ValueError("--min-delta must be non-negative")
+    if args.eval_every < 1:
+        raise ValueError("--eval-every must be at least 1")
     set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else " (CUDA unavailable; using CPU)"))
@@ -210,6 +246,8 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     latest_path = checkpoint_dir / "latest_checkpoint.pt"
     best_path = checkpoint_dir / "best_model.pt"
+    best_verification_path = checkpoint_dir / "best_verification_model.pt"
+    best_verification_metrics_path = checkpoint_dir / "best_verification_metrics.json"
     pretrained = EncoderClassifier.from_hparams(source=args.model_source, savedir=str(cache_dir),
                                                 run_opts={"device": str(device)})
     with torch.no_grad():
@@ -219,6 +257,7 @@ def main():
     optimizer = torch.optim.Adam(list(pretrained.mods.embedding_model.parameters()) + list(head.parameters()), lr=args.lr)
 
     start_epoch, best_val, epochs_without_improvement = 1, float("inf"), 0
+    best_eer, best_eer_epoch = float("inf"), None
     if args.resume:
         resume = torch.load(args.resume, map_location=device, weights_only=False)
         required = {"epoch", "embedding_model", "classification_head", "optimizer", "best_val_loss", "label_map"}
@@ -233,6 +272,8 @@ def main():
         start_epoch = int(resume["epoch"]) + 1
         best_val = float(resume["best_val_loss"])
         epochs_without_improvement = int(resume.get("epochs_without_improvement", 0))
+        best_eer = float(resume.get("best_eer", float("inf")))
+        best_eer_epoch = resume.get("best_eer_epoch")
         print(f"Resumed from epoch {resume['epoch']}; continuing at epoch {start_epoch}.")
 
     history_path = checkpoint_dir / "training_history.json"
@@ -256,9 +297,57 @@ def main():
                 print(f"Saved best model: {best_path}")
         else:
             epochs_without_improvement += 1
+        if args.dev_csv and epoch % args.eval_every == 0:
+            verification_metrics = run_verification_evaluation(
+                epoch, pretrained, best_val, label_map, args, embedding_dim
+            )
+            row.update(
+                {
+                    "verification_eer": float(verification_metrics["eer"]),
+                    "verification_far": float(verification_metrics["far"]),
+                    "verification_frr": float(verification_metrics["frr"]),
+                    "verification_threshold": float(verification_metrics["threshold"]),
+                }
+            )
+            print(
+                f"Verification evaluation epoch {epoch}:\n"
+                f"EER={row['verification_eer']:.6f}\n"
+                f"FAR={row['verification_far']:.6f}\n"
+                f"FRR={row['verification_frr']:.6f}\n"
+                f"Threshold={row['verification_threshold']:.6f}"
+            )
+            if row["verification_eer"] < best_eer:
+                best_eer = row["verification_eer"]
+                best_eer_epoch = epoch
+                best_verification = inference_payload(
+                    epoch, pretrained, best_val, label_map, args, embedding_dim
+                )
+                best_verification.update(
+                    {
+                        "eer": best_eer,
+                        "far": row["verification_far"],
+                        "frr": row["verification_frr"],
+                        "threshold": row["verification_threshold"],
+                    }
+                )
+                torch.save(best_verification, best_verification_path)
+                best_verification_metrics_path.write_text(
+                    json.dumps(
+                        {
+                            "epoch": epoch,
+                            "eer": best_eer,
+                            "far": row["verification_far"],
+                            "frr": row["verification_frr"],
+                            "threshold": row["verification_threshold"],
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                print(f"Saved best verification model: {best_verification_path}")
         latest_checkpoint = checkpoint_payload(
             epoch, pretrained, head, optimizer, best_val, epochs_without_improvement,
-            label_map, args, embedding_dim,
+            best_eer, best_eer_epoch, label_map, args, embedding_dim,
         )
         torch.save(latest_checkpoint, latest_path)
         history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
