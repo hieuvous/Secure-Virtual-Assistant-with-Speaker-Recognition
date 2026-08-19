@@ -22,6 +22,8 @@ def parse_args():
     p.add_argument("--checkpoint", default=None)
     p.add_argument("--output-json", required=True)
     p.add_argument("--max-utts-per-speaker", type=int, default=8)
+    p.add_argument("--fixed-threshold", type=float, default=None,
+                   help="Optional fixed threshold for additional FAR/FRR reporting.")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--model-source", default="speechbrain/spkrec-ecapa-voxceleb")
     p.add_argument("--cache-dir", default="./pretrained_ecapa_eval",
@@ -144,6 +146,20 @@ def main():
     labels = np.asarray([y for _, _, y in trials], dtype=np.int64)
 
     metrics = compute_eer(scores, labels)
+    if args.fixed_threshold is not None:
+        pos = labels == 1
+        neg = labels == 0
+        metrics.update(
+            {
+                "fixed_threshold": float(args.fixed_threshold),
+                "far_at_fixed_threshold": (
+                    float(np.mean(scores[neg] >= args.fixed_threshold)) if neg.any() else 0.0
+                ),
+                "frr_at_fixed_threshold": (
+                    float(np.mean(scores[pos] < args.fixed_threshold)) if pos.any() else 0.0
+                ),
+            }
+        )
     metrics.update(
         {
             "positive_trials": int((labels == 1).sum()),
