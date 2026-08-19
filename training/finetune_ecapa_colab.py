@@ -31,11 +31,11 @@ def parse_args():
     parser.add_argument("--output", required=True,
                         help="Path for the best inference-compatible model.")
     parser.add_argument("--checkpoint-dir", required=True,
-                        help="Directory for epoch checkpoints and best_model.pt.")
+                        help="Directory for latest_checkpoint.pt and best_model.pt.")
     parser.add_argument("--cache-dir", default="./pretrained_ecapa",
                         help="SpeechBrain pretrained-model cache directory.")
     parser.add_argument("--resume", default=None,
-                        help="Path to checkpoint_epoch_N.pt or best_model.pt.")
+                        help="Path to latest_checkpoint.pt.")
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -150,6 +150,18 @@ def checkpoint_payload(epoch, pretrained, head, optimizer, best_val_loss, label_
     }
 
 
+def inference_payload(epoch, pretrained, best_val_loss, label_map, args, embedding_dim):
+    """Small best-model file for evaluation and local ECAPA inference."""
+    return {
+        "epoch": epoch,
+        "embedding_model": pretrained.mods.embedding_model.state_dict(),
+        "best_val_loss": best_val_loss,
+        "label_map": label_map,
+        "training_args": vars(args),
+        "embedding_dim": embedding_dim,
+    }
+
+
 def main():
     args = parse_args()
     if args.epochs < 1:
@@ -179,6 +191,8 @@ def main():
     cache_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
+    latest_path = checkpoint_dir / "latest_checkpoint.pt"
+    best_path = checkpoint_dir / "best_model.pt"
     pretrained = EncoderClassifier.from_hparams(source=args.model_source, savedir=str(cache_dir),
                                                 run_opts={"device": str(device)})
     with torch.no_grad():
@@ -213,15 +227,19 @@ def main():
         print(json.dumps(row, indent=2))
         if val_metrics["loss"] < best_val:
             best_val = val_metrics["loss"]
-            best = checkpoint_payload(epoch, pretrained, head, optimizer, best_val, label_map, args, embedding_dim)
-            torch.save(best, checkpoint_dir / "best_model.pt")
-            torch.save(best, output)
-            print(f"Saved best model: {output}")
-        epoch_checkpoint = checkpoint_payload(epoch, pretrained, head, optimizer, best_val, label_map, args, embedding_dim)
-        epoch_path = checkpoint_dir / f"checkpoint_epoch_{epoch}.pt"
-        torch.save(epoch_checkpoint, epoch_path)
+            best = inference_payload(epoch, pretrained, best_val, label_map, args, embedding_dim)
+            torch.save(best, best_path)
+            if output.resolve() != best_path.resolve():
+                torch.save(best, output)
+                print(f"Saved best model: {best_path} and {output}")
+            else:
+                print(f"Saved best model: {best_path}")
+        latest_checkpoint = checkpoint_payload(
+            epoch, pretrained, head, optimizer, best_val, label_map, args, embedding_dim
+        )
+        torch.save(latest_checkpoint, latest_path)
         history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
-        print(f"Saved epoch checkpoint: {epoch_path}")
+        print(f"Updated resume checkpoint: {latest_path}")
 
 
 if __name__ == "__main__":
