@@ -54,12 +54,35 @@ def speaker_from_train_line(raw: str) -> str | None:
     return None
 
 
+def utterance_from_train_line(raw: str) -> tuple[str, str] | None:
+    """Extract ``(speaker_id, filename)`` from official or path-based rows."""
+    tokens = raw.strip().replace("\\", "/").split()
+    if len(tokens) >= 2 and any(tokens[1].lower().endswith(ext) for ext in AUDIO_EXTS):
+        return tokens[0], Path(tokens[1]).name
+
+    for token in reversed(tokens):
+        parts = [part for part in token.split("/") if part]
+        if len(parts) >= 2 and any(token.lower().endswith(ext) for ext in AUDIO_EXTS):
+            return parts[0], Path(parts[-1]).name
+    return None
+
+
 def speakers_from_train_list(path: Path) -> set[str]:
     return {
         speaker_id
         for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines()
         if (speaker_id := speaker_from_train_line(raw)) is not None
     }
+
+
+def utterances_from_train_list(path: Path) -> dict[str, set[str]]:
+    utterances = defaultdict(set)
+    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        parsed = utterance_from_train_line(raw)
+        if parsed:
+            speaker_id, filename = parsed
+            utterances[speaker_id].add(filename)
+    return dict(utterances)
 
 
 def write_csv(path: Path, rows: list[dict]):
@@ -80,17 +103,23 @@ def main():
     if not groups:
         raise RuntimeError(f"No audio found under {data_root}")
 
-    eligible = sorted(groups)
     if args.official_train_list:
-        allowed = speakers_from_train_list(Path(args.official_train_list))
-        matched = [s for s in eligible if s in allowed]
-        if matched:
-            eligible = matched
-        else:
-            print(
-                "WARNING: no speaker IDs matched the train list parser; "
-                "falling back to scanned folders. Check dataset layout."
+        allowed = utterances_from_train_list(Path(args.official_train_list))
+        filtered_groups = {
+            speaker_id: [path for path in paths if path.name in allowed.get(speaker_id, set())]
+            for speaker_id, paths in groups.items()
+            if speaker_id in allowed
+        }
+        filtered_groups = {speaker_id: paths for speaker_id, paths in filtered_groups.items() if paths}
+        if not filtered_groups:
+            raise RuntimeError(
+                "No audio paths matched the official train list. Check that --data-root "
+                "contains <speaker_id>/<audio_filename> files from Vietnam-Celeb-T."
             )
+        groups = filtered_groups
+        print(f"Restricted to {sum(map(len, groups.values()))} audio files in the official train list.")
+
+    eligible = sorted(groups)
 
     # A training speaker needs two retained utterances (one train, one val).
     # Development speakers only need one. Apply this before sampling so the
