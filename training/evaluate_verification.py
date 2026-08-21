@@ -87,7 +87,7 @@ def compute_eer(scores: np.ndarray, labels: np.ndarray):
 def main():
     args = parse_args()
     rng = random.Random(args.seed)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     Path(args.cache_dir).mkdir(parents=True, exist_ok=True)
 
     model = EncoderClassifier.from_hparams(

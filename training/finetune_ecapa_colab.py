@@ -220,7 +220,7 @@ def main():
     if args.eval_every < 1:
         raise ValueError("--eval-every must be at least 1")
     set_seed(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else " (CUDA unavailable; using CPU)"))
 
     train_df = pd.read_csv(args.train_csv)
