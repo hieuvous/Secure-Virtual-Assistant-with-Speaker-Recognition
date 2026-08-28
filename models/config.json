@@ -1,0 +1,16 @@
+{
+  "architecture": "ECAPA-TDNN",
+  "framework": "SpeechBrain",
+  "base_model": "speechbrain/spkrec-ecapa-voxceleb",
+  "fine_tuning_dataset": "Vietnam-Celeb",
+  "selected_epoch": 10,
+  "embedding_dim": 192,
+  "sample_rate": 16000,
+  "vad_model": "speechbrain/vad-crdnn-libriparty",
+  "enrollment_utts_per_speaker": 5,
+  "speaker_profile": "mean_l2_normalized_embedding",
+  "verification_threshold": 0.1566438227891922,
+  "threshold_source": "DEV all-impostor evaluation",
+  "similarity": "cosine_similarity",
+  "speaker_disjoint_test": true
+}

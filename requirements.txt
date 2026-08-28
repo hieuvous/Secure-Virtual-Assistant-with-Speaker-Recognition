@@ -1,11 +1,9 @@
-# Verified current package versions as of 2026-08.
 speechbrain==1.1.0
 faster-whisper==1.2.1
 streamlit==1.61.1
-
 numpy>=1.26,<3
 pandas>=2.2,<3
 scikit-learn>=1.5,<2
 PyYAML>=6.0
 soundfile>=0.12
-
+pytest>=8,<10

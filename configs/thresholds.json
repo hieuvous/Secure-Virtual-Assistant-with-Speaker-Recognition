@@ -1,6 +1,8 @@
 {
-  "sv_threshold": 0.25,
-  "sid_threshold": 0.25,
-  "status": "PROVISIONAL_ONLY",
-  "note": "Replace using development data. Do not report these as final thresholds."
+  "sv_threshold": 0.1566438227891922,
+  "sv_status": "TUNED_FROM_DEV_ALL_IMPOSTOR",
+  "sv_source": "models/config.json + results/all_impostor_metrics.json",
+  "sid_threshold": null,
+  "sid_status": "NEEDS_CALIBRATION",
+  "sid_note": "Run training/evaluate_identification.py. Until then the app uses SV threshold only as a clearly marked provisional SID fallback."
 }

@@ -1,0 +1,6 @@
+# OPTIONAL: only needed for the phoneme-based enrollment sentence experiment.
+# Core app / SV / SID do not need these packages.
+viphoneme==3.0.0
+vinorm
+underthesea
+eng_to_ipa

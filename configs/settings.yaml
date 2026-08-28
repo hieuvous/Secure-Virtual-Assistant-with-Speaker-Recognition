@@ -4,8 +4,11 @@ project:
 speaker:
   model_source: speechbrain/spkrec-ecapa-voxceleb
   sample_rate: 16000
-  local_checkpoint: models/finetuned_ecapa.pt
+  local_checkpoint: models/ecapa_vietnamceleb_epoch10.pt
   model_cache_dir: models/pretrained_ecapa
+  use_vad: true
+  vad_source: speechbrain/vad-crdnn-libriparty
+  vad_cache_dir: models/vad_crdnn
 
 asr:
   model_size: small

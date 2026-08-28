@@ -1,0 +1,25 @@
+{
+  "pretrained": {
+    "dev_eer": 0.13295748179469108,
+    "dev_threshold": 0.42368996143341064,
+    "test_eer": 0.11911584117887841,
+    "test_far_at_dev_threshold": 0.09464358809426349,
+    "test_frr_at_dev_threshold": 0.1346704871060172
+  },
+  "fine_tuned_epoch_10": {
+    "dev_eer": 0.09977683814893118,
+    "dev_threshold": 0.1566438227891922,
+    "test_eer": 0.0842056020115783,
+    "test_far_at_dev_threshold": 0.08996549909362025,
+    "test_frr_at_dev_threshold": 0.07879656160458452
+  },
+  "protocol": {
+    "dev_speakers": 37,
+    "test_speakers": 50,
+    "enrollment_utts_per_speaker": 5,
+    "test_genuine_trials": 698,
+    "test_impostor_trials": 34202,
+    "speaker_overlap": 0,
+    "vad": "speechbrain/vad-crdnn-libriparty"
+  }
+}

@@ -47,7 +47,8 @@ def list_profiles() -> list[dict]:
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT p.user_id, u.name, p.embedding_path, p.num_samples, p.model_version
+            SELECT p.user_id, u.name, p.embedding_path, p.num_samples,
+                   p.model_version, p.enrollment_method
             FROM speaker_profiles p
             JOIN users u ON u.id = p.user_id
             ORDER BY p.user_id
@@ -70,12 +71,13 @@ def get_profile(user_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def add_task(user_id: int, title: str, due_date: str | None = None):
+def add_task(user_id: int, title: str, due_date: str | None = None) -> int:
     with connect() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO tasks(user_id, title, due_date) VALUES (?, ?, ?)",
             (user_id, title, due_date),
         )
+        return int(cur.lastrowid)
 
 
 def get_tasks(user_id: int) -> list[dict]:
@@ -87,12 +89,25 @@ def get_tasks(user_id: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def add_private_note(user_id: int, title: str, content: str):
+def delete_task_by_title(user_id: int, title: str) -> int:
     with connect() as conn:
-        conn.execute(
+        cur = conn.execute(
+            """
+            DELETE FROM tasks
+            WHERE user_id=? AND LOWER(title)=LOWER(?)
+            """,
+            (user_id, title.strip()),
+        )
+        return int(cur.rowcount)
+
+
+def add_private_note(user_id: int, title: str, content: str) -> int:
+    with connect() as conn:
+        cur = conn.execute(
             "INSERT INTO private_notes(user_id, title, content) VALUES (?, ?, ?)",
             (user_id, title, content),
         )
+        return int(cur.lastrowid)
 
 
 def get_private_notes(user_id: int) -> list[dict]:
@@ -102,6 +117,67 @@ def get_private_notes(user_id: int) -> list[dict]:
             (user_id,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def add_schedule(
+    user_id: int,
+    subject: str,
+    start_time: str,
+    end_time: str | None = None,
+    location: str | None = None,
+) -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO schedules(user_id, subject, start_time, end_time, location)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_id, subject, start_time, end_time, location),
+        )
+        return int(cur.lastrowid)
+
+
+def get_schedule(user_id: int, date_prefix: str | None = None) -> list[dict]:
+    with connect() as conn:
+        if date_prefix:
+            rows = conn.execute(
+                """
+                SELECT * FROM schedules
+                WHERE user_id=? AND start_time LIKE ?
+                ORDER BY start_time
+                """,
+                (user_id, f"{date_prefix}%"),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM schedules WHERE user_id=? ORDER BY start_time",
+                (user_id,),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def upsert_course_room(subject: str, location: str):
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO course_rooms(subject, location)
+            VALUES (?, ?)
+            ON CONFLICT(subject) DO UPDATE SET location=excluded.location
+            """,
+            (subject.strip(), location.strip()),
+        )
+
+
+def get_course_room(subject: str) -> dict | None:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM course_rooms
+            WHERE LOWER(subject)=LOWER(?)
+            """,
+            (subject.strip(),),
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def add_audit_log(
@@ -121,3 +197,16 @@ def add_audit_log(
             """,
             (user_id, intent, auth_method, similarity_score, threshold, result),
         )
+
+
+def list_audit_logs(limit: int = 50) -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM audit_logs
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+    return [dict(r) for r in rows]

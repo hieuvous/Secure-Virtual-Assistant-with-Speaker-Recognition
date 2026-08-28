@@ -1,0 +1,3 @@
+Model,DEV EER (%),TEST EER (%),TEST FAR (%),TEST FRR (%)
+Pretrained ECAPA,13.3,11.91,9.46,13.47
+Fine-tuned ECAPA Epoch 10,9.98,8.42,9.0,7.88

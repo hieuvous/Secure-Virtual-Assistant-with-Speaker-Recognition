@@ -1,0 +1,11 @@
+speaker_id,method,audio_path
+user01,random,data/experiments/user01/random_1.wav
+user01,random,data/experiments/user01/random_2.wav
+user01,random,data/experiments/user01/random_3.wav
+user01,random,data/experiments/user01/random_4.wav
+user01,random,data/experiments/user01/random_5.wav
+user01,phoneme,data/experiments/user01/phoneme_1.wav
+user01,phoneme,data/experiments/user01/phoneme_2.wav
+user01,phoneme,data/experiments/user01/phoneme_3.wav
+user01,phoneme,data/experiments/user01/phoneme_4.wav
+user01,phoneme,data/experiments/user01/phoneme_5.wav

@@ -72,3 +72,12 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_schedule_user ON schedules(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
+
+
+CREATE TABLE IF NOT EXISTS course_rooms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject TEXT NOT NULL UNIQUE,
+    location TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_room_subject ON course_rooms(subject);

@@ -1,0 +1,3 @@
+speaker_id,audio_path
+user01,data/experiments/user01/query_1.wav
+user01,data/experiments/user01/query_2.wav

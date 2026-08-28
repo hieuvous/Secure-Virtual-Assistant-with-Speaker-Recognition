@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -14,6 +15,7 @@ from src.config import load_thresholds
 from src.database.db import init_db
 from src.database.repositories import (
     create_user,
+    list_audit_logs,
     list_users,
     upsert_profile,
 )
@@ -27,18 +29,26 @@ st.set_page_config(page_title="Secure Student Assistant", layout="wide")
 
 st.title("Secure Student Virtual Assistant")
 thresholds = load_thresholds()
-if thresholds.get("status") == "PROVISIONAL_ONLY":
+
+if thresholds.get("sid_status") == "NEEDS_CALIBRATION":
     st.warning(
-        "SV/SID thresholds hiện là provisional. Phải thay bằng threshold chọn từ development data trước khi report."
+        "SV threshold đã được calibrate từ DEV all-impostor. "
+        "SID threshold vẫn cần calibrate riêng; trước đó SID chỉ dùng SV threshold làm fallback tạm."
     )
 
 users = list_users()
 user_options = {f"{u['id']} - {u['name']}": u["id"] for u in users}
 
-tab_assistant, tab_enroll = st.tabs(["Assistant", "Speaker Enrollment"])
+tab_assistant, tab_enroll, tab_status = st.tabs(
+    ["Assistant", "Speaker Enrollment", "Model / Evaluation"]
+)
 
 with tab_assistant:
     st.subheader("Voice Assistant")
+    st.caption(
+        'Demo destructive command nên dùng tiêu đề trong ngoặc kép, ví dụ: '
+        'Xóa deadline "Báo cáo NLP".'
+    )
 
     active_user_id = None
     if user_options:
@@ -65,7 +75,10 @@ with tab_assistant:
                 st.write("**Auth:**", result["auth_requirement"])
                 st.write("**Speaker result:**", result["speaker"])
                 st.write("**Allowed:**", result["allowed"])
-                st.success(result["action"]["message"]) if result["action"]["success"] else st.error(result["action"]["message"])
+                if result["action"]["success"]:
+                    st.success(result["action"]["message"])
+                else:
+                    st.error(result["action"]["message"])
             except Exception as exc:
                 st.exception(exc)
 
@@ -90,6 +103,20 @@ with tab_enroll:
     st.divider()
     st.subheader("2. Record 5 enrollment utterances")
 
+    sentence_cfg_path = ROOT / "configs" / "enrollment_sentences.json"
+    sentence_cfg = None
+    if sentence_cfg_path.exists():
+        sentence_cfg = json.loads(sentence_cfg_path.read_text(encoding="utf-8"))
+        st.info(
+            f"Enrollment sentence method: {sentence_cfg.get('method', 'unknown')}"
+        )
+    else:
+        st.info(
+            "Chưa có optimized enrollment sentence set. "
+            "Core enrollment vẫn chạy; nếu làm Đợt 5 phoneme experiment, "
+            "hãy tạo configs/enrollment_sentences.json bằng script selection."
+        )
+
     users = list_users()
     user_options = {f"{u['id']} - {u['name']}": u["id"] for u in users}
     if not user_options:
@@ -99,9 +126,15 @@ with tab_enroll:
         uid = user_options[selected_user]
 
         samples = []
+        sentences = (sentence_cfg or {}).get("sentences", [])
         for i in range(1, 6):
+            label = (
+                f'Câu {i}: {sentences[i-1]}'
+                if len(sentences) >= i
+                else f"Enrollment recording {i}/5"
+            )
             sample = st.audio_input(
-                f"Enrollment recording {i}/5",
+                label,
                 sample_rate=16000,
                 key=f"enroll_{uid}_{i}",
             )
@@ -119,17 +152,59 @@ with tab_enroll:
                     save_uploaded_audio(sample, path)
                     paths.append(str(path))
 
-                with st.spinner("Extracting ECAPA embeddings..."):
+                with st.spinner("Extracting VAD + ECAPA embeddings..."):
                     profile = create_speaker_profile(uid, paths)
                     ecapa = get_ecapa()
-                    model_version = "finetuned" if ecapa.using_finetuned else "pretrained_voxceleb"
+                    model_version = (
+                        "finetuned_epoch10"
+                        if ecapa.using_finetuned
+                        else "pretrained_voxceleb"
+                    )
+                    enrollment_method = (
+                        (sentence_cfg or {}).get("method")
+                        or "fixed_5_mean"
+                    )
                     upsert_profile(
                         uid,
                         profile["embedding_path"],
                         profile["num_samples"],
                         model_version,
+                        enrollment_method=enrollment_method,
                     )
                 st.success(
                     f"Enrollment complete: {profile['num_samples']} samples, "
-                    f"embedding dim={profile['embedding_dim']}, model={model_version}"
+                    f"embedding dim={profile['embedding_dim']}, "
+                    f"model={model_version}, method={enrollment_method}"
                 )
+
+with tab_status:
+    st.subheader("Released Speaker Verification results")
+
+    metrics_path = ROOT / "results" / "all_impostor_metrics.json"
+    if metrics_path.exists():
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        pre = metrics["pretrained"]
+        ft = metrics["fine_tuned_epoch_10"]
+        protocol = metrics["protocol"]
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Pretrained TEST EER", f"{pre['test_eer']*100:.2f}%")
+            st.metric("Fine-tuned TEST EER", f"{ft['test_eer']*100:.2f}%")
+        with c2:
+            st.metric("Fine-tuned DEV EER", f"{ft['dev_eer']*100:.2f}%")
+            st.metric("SV threshold", f"{ft['dev_threshold']:.4f}")
+
+        st.write({
+            "test_speakers": protocol["test_speakers"],
+            "genuine_trials": protocol["test_genuine_trials"],
+            "impostor_trials": protocol["test_impostor_trials"],
+            "speaker_overlap": protocol["speaker_overlap"],
+            "vad": protocol["vad"],
+        })
+
+    st.subheader("Threshold status")
+    st.json(thresholds)
+
+    st.subheader("Recent audit logs")
+    st.dataframe(list_audit_logs(20), use_container_width=True)

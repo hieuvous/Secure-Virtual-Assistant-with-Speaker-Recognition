@@ -27,3 +27,10 @@ models/*.ckpt
 logs/
 tmp/
 .ipynb_checkpoints/
+
+
+# Experiment/private runtime audio
+data/experiments/
+submission/
+
+# Optional generated enrollment config/results can be committed only if desired
