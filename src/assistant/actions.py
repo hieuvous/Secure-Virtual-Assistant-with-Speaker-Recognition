@@ -22,13 +22,13 @@ def execute_action(user_id: int | None, intent: str, entities: dict) -> dict:
     if intent == "GET_TIME":
         return {
             "success": True,
-            "message": datetime.now().strftime("Bây giờ là %H:%M."),
+            "message": f"Bây giờ là {datetime.now().strftime('%H:%M')}.",
         }
 
     if intent == "GET_DATE":
         return {
             "success": True,
-            "message": datetime.now().strftime("Hôm nay là %d/%m/%Y."),
+            "message": f"Hôm nay là {datetime.now().strftime('%d/%m/%Y')}.",
         }
 
     if intent == "GET_COURSE_ROOM":
