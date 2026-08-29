@@ -31,7 +31,7 @@ def detect_intent(text: str) -> dict:
         entities["title"] = quoted
         entities["subject"] = quoted
 
-    if any(k in t for k in ["may gio", "bay gio la may gio"]):
+    if any(k in t for k in ["may gio", "bay gio la", "gio hien tai"]):
         intent = "GET_TIME"
 
     elif any(k in t for k in ["ngay may", "hom nay ngay", "hom nay la ngay"]):
