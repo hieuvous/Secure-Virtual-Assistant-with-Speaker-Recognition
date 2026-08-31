@@ -1,5 +1,5 @@
 {
-  "sv_threshold": 0.1366438227891922,
+  "sv_threshold": 0.1566438227891922,
   "sv_status": "TUNED_FROM_DEV_ALL_IMPOSTOR",
   "sv_source": "models/config.json + results/all_impostor_metrics.json",
   "sid_threshold": null,

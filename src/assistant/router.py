@@ -31,13 +31,13 @@ def detect_intent(text: str) -> dict:
         entities["title"] = quoted
         entities["subject"] = quoted
 
-    if any(k in t for k in ["may gio", "bay gio la", "gio hien tai"]):
+    if any(k in t for k in ["may gio", "bay gio la", "gio hien tai", "xem gio", "thoi gian hien tai"]):
         intent = "GET_TIME"
 
-    elif any(k in t for k in ["ngay may", "hom nay ngay", "hom nay la ngay"]):
+    elif any(k in t for k in ["ngay may", "hom nay ngay", "hom nay la ngay", "thu may", "ngay bao nhieu", "hom nay la thu"]):
         intent = "GET_DATE"
 
-    elif "phong" in t and any(k in t for k in ["hoc", "mon"]):
+    elif any(k in t for k in ["phong hoc", "hoc o phong", "hoc o dau", "phong nao", "dia diem hoc"]) or ("phong" in t and "mon" in t):
         intent = "GET_COURSE_ROOM"
         if not quoted:
             # Lightweight extraction: text after "môn"/"mon" and before "học"/"hoc" if possible.
@@ -45,16 +45,16 @@ def detect_intent(text: str) -> dict:
             if m:
                 entities["subject"] = m.group(1).strip(" ?.")
 
-    elif any(k in t for k in ["lich hoc", "hom nay toi hoc", "toi hoc mon gi"]):
+    elif any(k in t for k in ["lich hoc", "hom nay toi hoc", "toi hoc mon gi", "thoi khoa bieu", "ngay mai hoc gi", "co mon nao"]):
         intent = "GET_SCHEDULE"
 
-    elif any(k in t for k in ["ghi chu rieng", "private note", "ghi chu cua toi"]):
+    elif any(k in t for k in ["ghi chu rieng", "private note", "ghi chu cua toi", "mo ghi chu", "xem ghi chu", "doc ghi chu"]):
         intent = "READ_PRIVATE_NOTE"
 
-    elif any(k in t for k in ["deadline", "con task", "con viec", "nhiem vu"]):
-        if any(k in t for k in ["xoa", "huy"]):
+    elif any(k in t for k in ["deadline", "con task", "con viec", "nhiem vu","viec can lam", "danh sach cong viec"]):
+        if any(k in t for k in ["xoa", "huy","xoa deadline", "xoa task", "xoa cong viec"]):
             intent = "DELETE_TASK"
-        elif any(k in t for k in ["them", "tao"]):
+        elif any(k in t for k in ["them", "tao", "them deadline", "them task", "them cong viec"]):
             intent = "ADD_TASK"
         else:
             intent = "GET_TASKS"

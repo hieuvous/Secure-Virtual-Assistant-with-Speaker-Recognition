@@ -18,6 +18,15 @@ from src.database.repositories import (
     list_audit_logs,
     list_users,
     upsert_profile,
+
+    add_task,
+    get_tasks,
+
+    add_schedule,
+    get_schedule,
+
+    add_private_note,
+    get_private_notes,
 )
 from src.pipeline import process_request
 from src.speaker.model import get_ecapa
@@ -39,8 +48,13 @@ if thresholds.get("sid_status") == "NEEDS_CALIBRATION":
 users = list_users()
 user_options = {f"{u['id']} - {u['name']}": u["id"] for u in users}
 
-tab_assistant, tab_enroll, tab_status = st.tabs(
-    ["Assistant", "Speaker Enrollment", "Model / Evaluation"]
+tab_assistant, tab_enroll, tab_data, tab_status = st.tabs(
+    [
+        "Assistant",
+        "Speaker Enrollment",
+        "My Data",
+        "Model / Evaluation",
+    ]
 )
 
 with tab_assistant:
@@ -176,6 +190,157 @@ with tab_enroll:
                     f"embedding dim={profile['embedding_dim']}, "
                     f"model={model_version}, method={enrollment_method}"
                 )
+    with tab_data:
+        st.subheader("My Data")
+        st.caption(
+            "Nhập dữ liệu cá nhân để assistant có thể trả lời task, lịch học và ghi chú."
+        )
+
+        data_users = list_users()
+
+        if not data_users:
+            st.info("Hãy tạo user trong tab Speaker Enrollment trước.")
+
+        else:
+            data_user_options = {
+                f"{u['id']} - {u['name']}": u["id"]
+                for u in data_users
+            }
+
+            selected_data_user = st.selectbox(
+                "User",
+                list(data_user_options.keys()),
+                key="my_data_user",
+            )
+
+            data_uid = data_user_options[selected_data_user]
+
+            # =========================================================
+            # TASK
+            # =========================================================
+
+            st.markdown("### Deadline / Task")
+
+            with st.form("add_task_form"):
+                task_title = st.text_input(
+                    "Tên deadline",
+                    placeholder="Báo cáo NLP",
+                )
+
+                task_due = st.text_input(
+                    "Hạn nộp (không bắt buộc)",
+                    placeholder="2026-09-05 23:59",
+                )
+
+                submit_task = st.form_submit_button("Add task")
+
+                if submit_task:
+                    if not task_title.strip():
+                        st.error("Tên deadline không được để trống.")
+                    else:
+                        add_task(
+                            data_uid,
+                            task_title.strip(),
+                            task_due.strip() or None,
+                        )
+                        st.success("Đã thêm deadline.")
+
+            # =========================================================
+            # SCHEDULE
+            # =========================================================
+
+            st.markdown("### Schedule")
+
+            with st.form("add_schedule_form"):
+                subject = st.text_input(
+                    "Môn học",
+                    placeholder="Machine Learning",
+                )
+
+                start_time = st.text_input(
+                    "Bắt đầu",
+                    placeholder="2026-09-01 09:00",
+                )
+
+                end_time = st.text_input(
+                    "Kết thúc (không bắt buộc)",
+                    placeholder="2026-09-01 11:00",
+                )
+
+                location = st.text_input(
+                    "Phòng",
+                    placeholder="I.23",
+                )
+
+                submit_schedule = st.form_submit_button("Add schedule")
+
+                if submit_schedule:
+                    if not subject.strip() or not start_time.strip():
+                        st.error("Môn học và thời gian bắt đầu là bắt buộc.")
+                    else:
+                        add_schedule(
+                            data_uid,
+                            subject.strip(),
+                            start_time.strip(),
+                            end_time.strip() or None,
+                            location.strip() or None,
+                        )
+                        st.success("Đã thêm lịch học.")
+
+            # =========================================================
+            # PRIVATE NOTE
+            # =========================================================
+
+            st.markdown("### Private Note")
+
+            with st.form("add_note_form"):
+                note_title = st.text_input(
+                    "Tiêu đề ghi chú",
+                    placeholder="Ghi chú cá nhân",
+                )
+
+                note_content = st.text_area(
+                    "Nội dung",
+                    placeholder="Nội dung ghi chú...",
+                )
+
+                submit_note = st.form_submit_button("Add private note")
+
+                if submit_note:
+                    if not note_content.strip():
+                        st.error("Nội dung ghi chú không được để trống.")
+                    else:
+                        add_private_note(
+                            data_uid,
+                            note_title.strip() or "Ghi chú",
+                            note_content.strip(),
+                        )
+                        st.success("Đã thêm ghi chú.")
+
+            # =========================================================
+            # VIEW CURRENT DATA
+            # =========================================================
+
+            st.divider()
+            st.markdown("### Current data")
+
+            st.write("**Tasks**")
+            st.dataframe(
+                get_tasks(data_uid),
+                use_container_width=True,
+            )
+
+            st.write("**Schedules**")
+            st.dataframe(
+                get_schedule(data_uid),
+                use_container_width=True,
+            )
+
+            st.write("**Private notes**")
+            st.dataframe(
+                get_private_notes(data_uid),
+                use_container_width=True,
+            )
 
 with tab_status:
     st.subheader("Released Speaker Verification results")

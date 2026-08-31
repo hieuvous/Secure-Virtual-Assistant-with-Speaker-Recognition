@@ -42,7 +42,7 @@ This does NOT use the microphone.
 ## Stage 3 — Unit tests
 
 ```powershell
-pytest -q
+pytest -q tests
 ```
 
 Meaning:
