@@ -1,36 +1,34 @@
+# Python cache
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Virtual environment
 .venv/
 venv/
+
+# Secrets / IDE
 .env
 .vscode/
 .idea/
 
-data/raw/
-data/processed/
-data/users/
-data/runtime/
-*.wav
-*.mp3
-*.flac
-
+# Large model files
 models/*.pt
 models/*.pth
 models/*.ckpt
+
+# Generated speaker embeddings
 *.npy
 
+# Runtime database
 *.db
 *.sqlite
 *.sqlite3
 
+# Runtime files
 logs/
 tmp/
 .ipynb_checkpoints/
 
-
-# Experiment/private runtime audio
-data/experiments/
+# Final submission package
 submission/
-
-# Optional generated enrollment config/results can be committed only if desired
