@@ -20,15 +20,17 @@ def _require_user(user_id: int | None) -> dict | None:
 
 def execute_action(user_id: int | None, intent: str, entities: dict) -> dict:
     if intent == "GET_TIME":
+        now = datetime.now()
         return {
             "success": True,
-            "message": f"Bây giờ là {datetime.now().strftime('%H:%M')}.",
+            "message": f"Bây giờ là {now.strftime('%H:%M')}.",
         }
 
     if intent == "GET_DATE":
+        now = datetime.now()
         return {
             "success": True,
-            "message": f"Hôm nay là {datetime.now().strftime('%d/%m/%Y')}.",
+            "message": f"Hôm nay là {now.strftime('%d/%m/%Y')}.",
         }
 
     if intent == "GET_COURSE_ROOM":
