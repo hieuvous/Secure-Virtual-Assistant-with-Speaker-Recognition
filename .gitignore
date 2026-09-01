@@ -17,13 +17,19 @@ models/*.pt
 models/*.pth
 models/*.ckpt
 
-# Generated speaker embeddings
+# Ignore NPY nói chung
 *.npy
 
-# Runtime database
+# Nhưng cho phép speaker embeddings dùng chung
+!data/users/**/speaker_embedding.npy
+
+# Ignore database nói chung
 *.db
 *.sqlite
 *.sqlite3
+
+# Nhưng cho phép database chính
+!data/app.db
 
 # Runtime files
 logs/
