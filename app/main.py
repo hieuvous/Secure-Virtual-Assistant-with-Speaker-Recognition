@@ -180,7 +180,7 @@ with tab_enroll:
                     )
                     upsert_profile(
                         uid,
-                        profile["embedding_path"],
+                        profile["embedding"],
                         profile["num_samples"],
                         model_version,
                         enrollment_method=enrollment_method,

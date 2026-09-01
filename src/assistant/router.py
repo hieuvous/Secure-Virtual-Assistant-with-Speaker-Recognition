@@ -10,6 +10,29 @@ def _norm(text: str) -> str:
     text = "".join(c for c in text if unicodedata.category(c) != "Mn")
     return re.sub(r"\s+", " ", text)
 
+def _extract_task_title(text: str) -> str | None:
+    # Nếu text có ngoặc kép thì ưu tiên title trong ngoặc
+    quoted = _quoted(text)
+    if quoted:
+        return quoted
+
+    # Cho phép:
+    # Thêm deadline báo cáo NLP
+    # Thêm deadline, báo cáo NLP
+    # Xóa task: học tiếng Anh
+    match = re.search(
+        r"(?:thêm|them|tạo|tao|xóa|xoa|hủy|huy)"
+        r"\s+(?:deadline|task|nhiệm\s*vụ|nhiem\s+vu)"
+        r"\s*[,;:\-]?\s*(.+?)\s*[.!?]*$",
+        text.strip(),
+        flags=re.IGNORECASE,
+    )
+
+    if match:
+        title = match.group(1).strip()
+        return title if title else None
+
+    return None
 
 def _quoted(text: str) -> str | None:
     match = re.search(r'["“](.+?)["”]', text)
@@ -51,32 +74,49 @@ def detect_intent(text: str) -> dict:
     elif any(k in t for k in ["ghi chu rieng", "private note", "ghi chu cua toi", "mo ghi chu", "xem ghi chu", "doc ghi chu"]):
         intent = "READ_PRIVATE_NOTE"
 
+    # elif any(k in t for k in ["deadline", "con task", "con viec", "nhiem vu"]):
+    #     if any(k in t for k in ["xoa", "huy"]):
+    #         intent = "DELETE_TASK"
+
+    #         if not quoted:
+    #             m = re.search(
+    #                 r"(?:xoa|huy)\s+(?:deadline|task|nhiem vu)\s+(.+)",
+    #                 t
+    #             )
+    #             if m:
+    #                 entities["title"] = m.group(1).strip()
+
+    #     elif any(k in t for k in ["them", "tao"]):
+    #         intent = "ADD_TASK"
+
+    #         if not quoted:
+    #             m = re.search(
+    #                 r"(?:them|tao)\s+(?:deadline|task|nhiem vu)\s+(.+)",
+    #                 t
+    #             )
+    #             if m:
+    #                 entities["title"] = m.group(1).strip()
+
+    #     else:
+    #         intent = "GET_TASKS"
+
     elif any(k in t for k in ["deadline", "con task", "con viec", "nhiem vu"]):
         if any(k in t for k in ["xoa", "huy"]):
             intent = "DELETE_TASK"
 
-            if not quoted:
-                m = re.search(
-                    r"(?:xoa|huy)\s+(?:deadline|task|nhiem vu)\s+(.+)",
-                    t
-                )
-                if m:
-                    entities["title"] = m.group(1).strip()
+            title = _extract_task_title(text)
+            if title:
+                entities["title"] = title
 
         elif any(k in t for k in ["them", "tao"]):
             intent = "ADD_TASK"
 
-            if not quoted:
-                m = re.search(
-                    r"(?:them|tao)\s+(?:deadline|task|nhiem vu)\s+(.+)",
-                    t
-                )
-                if m:
-                    entities["title"] = m.group(1).strip()
+            title = _extract_task_title(text)
+            if title:
+                entities["title"] = title
 
         else:
             intent = "GET_TASKS"
-
     else:
         intent = "UNKNOWN"
 

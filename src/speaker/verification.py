@@ -1,11 +1,9 @@
 from pathlib import Path
+
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
-from src.config import ROOT
-
-from src.config import load_thresholds
-from src.speaker.embedding import extract_embedding
+from src.config import ROOT, load_thresholds
+from src.speaker.embedding import embedding_to_numpy, extract_embedding
 from src.speaker.scoring import cosine_score
 
 
@@ -18,28 +16,29 @@ def verify_embedding(query, reference, threshold: float) -> dict:
     }
 
 
+def _reference_to_numpy(reference_embedding) -> np.ndarray:
+    """Accept a database vector and retain old SQLite path compatibility."""
+    if isinstance(reference_embedding, (str, Path)) and not str(reference_embedding).lstrip().startswith("["):
+        path = Path(reference_embedding)
+        if not path.is_absolute():
+            path = ROOT / path
+        if not path.exists():
+            raise FileNotFoundError(f"Speaker profile not found: {path}")
+        return embedding_to_numpy(np.load(path))
+    return embedding_to_numpy(reference_embedding)
+
+
 def verify_speaker(
     audio_path: str,
     claimed_user_id: int,
-    embedding_path: str,
+    reference_embedding,
     threshold: float | None = None,
 ) -> dict:
     if threshold is None:
         threshold = float(load_thresholds()["sv_threshold"])
 
-    path = Path(embedding_path)
-
-    if not path.is_absolute():
-        path = ROOT / path
-
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Speaker profile not found: {path}"
-        )
-
     query = extract_embedding(audio_path, use_vad=True)
-    reference = np.load(path)
     return {
         "user_id": int(claimed_user_id),
-        **verify_embedding(query, reference, threshold),
+        **verify_embedding(query, _reference_to_numpy(reference_embedding), threshold),
     }

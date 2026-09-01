@@ -9,6 +9,7 @@ venv/
 
 # Secrets / IDE
 .env
+.streamlit/secrets.toml
 .vscode/
 .idea/
 
@@ -45,7 +46,7 @@ models/vad_crdnn/
 *.sqlite3
 
 # Nhưng cho phép database chính dùng chung
-!data/app.db
+data/app.db
 
 # =========================
 # Runtime / temporary files

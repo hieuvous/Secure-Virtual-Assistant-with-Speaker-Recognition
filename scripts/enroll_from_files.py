@@ -16,5 +16,5 @@ init_db()
 r=create_speaker_profile(a.user_id,a.audio)
 s=get_ecapa()
 v="finetuned_epoch10" if s.using_finetuned else "pretrained_voxceleb"
-upsert_profile(a.user_id,r["embedding_path"],r["num_samples"],v)
+upsert_profile(a.user_id,r["embedding"],r["num_samples"],v)
 print(r);print("model_version:",v)

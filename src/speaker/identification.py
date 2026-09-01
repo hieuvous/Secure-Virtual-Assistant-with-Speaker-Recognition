@@ -1,11 +1,9 @@
 from pathlib import Path
+
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
-from src.config import ROOT
-
-from src.config import load_thresholds
-from src.speaker.embedding import extract_embedding
+from src.config import ROOT, load_thresholds
+from src.speaker.embedding import embedding_to_numpy, extract_embedding
 from src.speaker.scoring import cosine_score
 
 
@@ -13,18 +11,18 @@ def identify_embedding(query, profiles: list[dict], threshold: float) -> dict:
     if not profiles:
         return {
             "user_id": None, "name": None, "score": float("-inf"),
-            "threshold": float(threshold), "is_unknown": True, "ranking": []
+            "threshold": float(threshold), "is_unknown": True, "ranking": [],
         }
 
-    ranking = []
-    for p in profiles:
-        ranking.append({
-            "user_id": int(p["user_id"]),
-            "name": p.get("name"),
-            "score": cosine_score(query, p["embedding"]),
-        })
-    ranking.sort(key=lambda x: x["score"], reverse=True)
-
+    ranking = [
+        {
+            "user_id": int(profile["user_id"]),
+            "name": profile.get("name"),
+            "score": cosine_score(query, profile["embedding"]),
+        }
+        for profile in profiles
+    ]
+    ranking.sort(key=lambda row: row["score"], reverse=True)
     best = ranking[0]
     unknown = best["score"] < threshold
     return {
@@ -37,37 +35,40 @@ def identify_embedding(query, profiles: list[dict], threshold: float) -> dict:
     }
 
 
-def identify_speaker(audio_path: str, profiles: list[dict], threshold: float | None = None) -> dict:
-    tcfg = load_thresholds()
-    calibrated = True
+def _legacy_embedding(profile: dict) -> np.ndarray | None:
+    """Read old SQLite path records only when no database vector is present."""
+    path_value = profile.get("embedding_path")
+    if not path_value:
+        return None
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = ROOT / path
+    return embedding_to_numpy(np.load(path)) if path.exists() else None
 
+
+def identify_speaker(audio_path: str, profiles: list[dict], threshold: float | None = None) -> dict:
+    thresholds = load_thresholds()
+    calibrated = True
     if threshold is None:
-        threshold = tcfg.get("sid_threshold")
+        threshold = thresholds.get("sid_threshold")
         if threshold is None:
-            # App can be smoke-tested before SID calibration, but this MUST NOT
-            # be reported as the final SID threshold.
-            threshold = float(tcfg["sv_threshold"])
+            threshold = float(thresholds["sv_threshold"])
             calibrated = False
 
     loaded = []
-
-    for p in profiles:
-        path = Path(p["embedding_path"])
-
-        if not path.is_absolute():
-            path = ROOT / path
-
-        if path.exists():
+    for profile in profiles:
+        embedding = profile.get("embedding")
+        if embedding is None:
+            embedding = _legacy_embedding(profile)
+        if embedding is not None:
             loaded.append({
-                "user_id": int(p["user_id"]),
-                "name": p.get("name"),
-                "embedding": np.load(path),
+                "user_id": int(profile["user_id"]),
+                "name": profile.get("name"),
+                "embedding": embedding_to_numpy(embedding),
             })
 
     result = identify_embedding(
-        extract_embedding(audio_path, use_vad=True),
-        loaded,
-        float(threshold),
+        extract_embedding(audio_path, use_vad=True), loaded, float(threshold)
     )
     result["sid_threshold_calibrated"] = calibrated
     result["threshold_source"] = "SID_DEV" if calibrated else "PROVISIONAL_SV_FALLBACK"

@@ -38,7 +38,7 @@ def process_request(audio_path: str, active_user_id: int | None = None) -> dict:
                 speaker_result = verify_speaker(
                     audio_path,
                     claimed_user_id=active_user_id,
-                    embedding_path=profile["embedding_path"],
+                    reference_embedding=profile["embedding"],
                 )
                 allowed = speaker_result["accepted"]
                 user_id = active_user_id
