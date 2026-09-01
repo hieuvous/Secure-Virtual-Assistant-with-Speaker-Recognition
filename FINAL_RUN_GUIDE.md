@@ -70,7 +70,7 @@ Expected key values:
 Use a clean WAV of yourself:
 
 ```powershell
-python scripts/smoke_test_ecapa.py sample.wav
+python scripts/smoke_test_ecapa.py test.wav
 ```
 
 Meaning:
