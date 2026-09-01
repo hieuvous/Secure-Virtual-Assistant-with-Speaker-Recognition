@@ -11,6 +11,69 @@ from src.database.repositories import (
     get_tasks,
 )
 
+import re
+import unicodedata
+from difflib import SequenceMatcher
+
+from src.database.repositories import (
+    add_task,
+    delete_task_by_title,
+    get_tasks,
+    # các import khác giữ nguyên
+)
+
+def _normalize_text(text: str) -> str:
+    """
+    Chuẩn hóa để so sánh:
+    - lowercase
+    - bỏ dấu tiếng Việt
+    - bỏ ký tự đặc biệt
+    - chuẩn hóa khoảng trắng
+    """
+    text = text.lower().strip()
+
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(
+        c for c in text
+        if unicodedata.category(c) != "Mn"
+    )
+
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
+
+
+def _find_similar_task(user_id: int, spoken_title: str):
+    """
+    Tìm task gần giống nhất với title do ASR nhận được.
+    """
+
+    tasks = get_tasks(user_id)
+
+    if not tasks:
+        return None, 0.0
+
+    target = _normalize_text(spoken_title)
+
+    best_task = None
+    best_score = 0.0
+
+    for task in tasks:
+        actual_title = task["title"]
+
+        score = SequenceMatcher(
+            None,
+            target,
+            _normalize_text(actual_title)
+        ).ratio()
+
+        if score > best_score:
+            best_score = score
+            best_task = task
+
+    return best_task, best_score
+
 
 def _require_user(user_id: int | None) -> dict | None:
     if user_id is None:
@@ -122,22 +185,75 @@ def execute_action(user_id: int | None, intent: str, entities: dict) -> dict:
         err = _require_user(user_id)
         if err:
             return err
+
         title = (entities.get("title") or "").strip()
+
         if not title:
             return {
                 "success": False,
-                "message": 'Để demo ổn định, hãy đặt tiêu đề trong ngoặc kép: Xóa deadline "Báo cáo NLP".',
+                "message": (
+                    "Không xác định được tên deadline cần xóa. "
+                    "Ví dụ: Xóa deadline Báo cáo NLP."
+                ),
             }
+
+        # ---------------------------------------------------------
+        # 1. Thử xóa chính xác trước
+        # ---------------------------------------------------------
         deleted = delete_task_by_title(user_id, title)
+
         if deleted:
             return {
                 "success": True,
                 "message": f"Đã xóa deadline: {title}.",
-                "data": {"deleted": deleted},
+                "data": {
+                    "deleted": deleted,
+                    "matched_title": title,
+                    "match_type": "exact",
+                },
             }
+
+        # ---------------------------------------------------------
+        # 2. Nếu ASR nhận sai một chút → fuzzy matching
+        # ---------------------------------------------------------
+        best_task, similarity = _find_similar_task(user_id, title)
+
+        # 0.80 đủ để xử lý NLP -> NLB nhưng tránh match quá xa
+        if best_task is not None and similarity >= 0.80:
+            actual_title = best_task["title"]
+
+            deleted = delete_task_by_title(
+                user_id,
+                actual_title
+            )
+
+            if deleted:
+                return {
+                    "success": True,
+                    "message": (
+                        f'Đã xóa deadline: "{actual_title}". '
+                        f'(Lệnh nhận được: "{title}")'
+                    ),
+                    "data": {
+                        "deleted": deleted,
+                        "spoken_title": title,
+                        "matched_title": actual_title,
+                        "similarity": round(similarity, 3),
+                        "match_type": "fuzzy",
+                    },
+                }
+
+        # ---------------------------------------------------------
+        # 3. Không tìm được task đủ giống
+        # ---------------------------------------------------------
         return {
             "success": False,
-            "message": f"Không tìm thấy deadline có tên chính xác: {title}.",
+            "message": (
+                f'Không tìm thấy deadline phù hợp với "{title}".'
+            ),
+            "data": {
+                "best_similarity": round(similarity, 3),
+            },
         }
 
     return {

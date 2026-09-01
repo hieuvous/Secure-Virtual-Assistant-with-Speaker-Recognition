@@ -51,11 +51,29 @@ def detect_intent(text: str) -> dict:
     elif any(k in t for k in ["ghi chu rieng", "private note", "ghi chu cua toi", "mo ghi chu", "xem ghi chu", "doc ghi chu"]):
         intent = "READ_PRIVATE_NOTE"
 
-    elif any(k in t for k in ["deadline", "con task", "con viec", "nhiem vu","viec can lam", "danh sach cong viec"]):
-        if any(k in t for k in ["xoa", "huy","xoa deadline", "xoa task", "xoa cong viec"]):
+    elif any(k in t for k in ["deadline", "con task", "con viec", "nhiem vu"]):
+        if any(k in t for k in ["xoa", "huy"]):
             intent = "DELETE_TASK"
-        elif any(k in t for k in ["them", "tao", "them deadline", "them task", "them cong viec"]):
+
+            if not quoted:
+                m = re.search(
+                    r"(?:xoa|huy)\s+(?:deadline|task|nhiem vu)\s+(.+)",
+                    t
+                )
+                if m:
+                    entities["title"] = m.group(1).strip()
+
+        elif any(k in t for k in ["them", "tao"]):
             intent = "ADD_TASK"
+
+            if not quoted:
+                m = re.search(
+                    r"(?:them|tao)\s+(?:deadline|task|nhiem vu)\s+(.+)",
+                    t
+                )
+                if m:
+                    entities["title"] = m.group(1).strip()
+
         else:
             intent = "GET_TASKS"
 

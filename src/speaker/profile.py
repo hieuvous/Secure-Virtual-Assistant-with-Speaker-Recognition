@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from src.config import ROOT
 from src.speaker.embedding import extract_embedding, l2_normalize
@@ -24,14 +26,21 @@ def create_speaker_profile(
     embeddings = [extract_embedding(p, use_vad=True) for p in audio_paths]
     profile = aggregate_embeddings(embeddings)
 
-    user_dir = ROOT / "data" / "users" / str(user_id)
-    user_dir.mkdir(parents=True, exist_ok=True)
-    embedding_path = user_dir / "speaker_embedding.npy"
+    # Relative path dùng chung cho mọi máy
+    relative_path = f"data/users/{user_id}/speaker_embedding.npy"
+    # Absolute path chỉ dùng để ghi file trên máy hiện tại
+    embedding_path = ROOT / relative_path
+
+    embedding_path.parent.mkdir(parents=True, exist_ok=True)
     np.save(embedding_path, profile)
 
     return {
         "user_id": int(user_id),
-        "embedding_path": str(embedding_path),
+
+        # DB sẽ lưu dạng:
+        # data/users/4/speaker_embedding.npy
+        "embedding_path": relative_path.as_posix(),
+
         "num_samples": len(audio_paths),
         "embedding_dim": int(profile.shape[0]),
         "sentence_ids": sentence_ids,

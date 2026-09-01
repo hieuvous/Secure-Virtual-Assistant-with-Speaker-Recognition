@@ -12,10 +12,22 @@ venv/
 .vscode/
 .idea/
 
+# =========================
+# Model files / model cache
+# =========================
+
 # Large model files
 models/*.pt
 models/*.pth
 models/*.ckpt
+
+# SpeechBrain / Hugging Face caches generated locally
+models/pretrained_ecapa/
+models/vad_crdnn/
+
+# =========================
+# Speaker data
+# =========================
 
 # Ignore NPY nói chung
 *.npy
@@ -23,15 +35,25 @@ models/*.ckpt
 # Nhưng cho phép speaker embeddings dùng chung
 !data/users/**/speaker_embedding.npy
 
+# =========================
+# Database
+# =========================
+
 # Ignore database nói chung
 *.db
 *.sqlite
 *.sqlite3
 
-# Nhưng cho phép database chính
+# Nhưng cho phép database chính dùng chung
 !data/app.db
 
-# Runtime files
+# =========================
+# Runtime / temporary files
+# =========================
+
+# Audio VAD / query files sinh ra khi chạy app
+data/runtime/
+
 logs/
 tmp/
 .ipynb_checkpoints/

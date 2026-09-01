@@ -1,6 +1,9 @@
 from pathlib import Path
 import numpy as np
 
+ROOT = Path(__file__).resolve().parents[2]
+from src.config import ROOT
+
 from src.config import load_thresholds
 from src.speaker.embedding import extract_embedding
 from src.speaker.scoring import cosine_score
@@ -47,8 +50,13 @@ def identify_speaker(audio_path: str, profiles: list[dict], threshold: float | N
             calibrated = False
 
     loaded = []
+
     for p in profiles:
         path = Path(p["embedding_path"])
+
+        if not path.is_absolute():
+            path = ROOT / path
+
         if path.exists():
             loaded.append({
                 "user_id": int(p["user_id"]),

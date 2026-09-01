@@ -1,6 +1,9 @@
 from pathlib import Path
 import numpy as np
 
+ROOT = Path(__file__).resolve().parents[2]
+from src.config import ROOT
+
 from src.config import load_thresholds
 from src.speaker.embedding import extract_embedding
 from src.speaker.scoring import cosine_score
@@ -25,8 +28,14 @@ def verify_speaker(
         threshold = float(load_thresholds()["sv_threshold"])
 
     path = Path(embedding_path)
+
+    if not path.is_absolute():
+        path = ROOT / path
+
     if not path.exists():
-        raise FileNotFoundError(f"Speaker profile not found: {path}")
+        raise FileNotFoundError(
+            f"Speaker profile not found: {path}"
+        )
 
     query = extract_embedding(audio_path, use_vad=True)
     reference = np.load(path)
