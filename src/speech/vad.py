@@ -3,10 +3,13 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 import hashlib
+import re
+import shutil
 
 import torch
 import torchaudio
 from speechbrain.inference.VAD import VAD
+from speechbrain.utils.fetching import LocalStrategy
 
 from src.config import ROOT, load_settings, project_path
 from src.speech.preprocessing import load_mono_16k, TARGET_SR
@@ -19,13 +22,34 @@ class VADService:
         cfg = load_settings()["speaker"]
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         cache_dir = project_path(cfg["vad_cache_dir"])
+        self._discard_broken_cache(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.model = VAD.from_hparams(
             source=cfg["vad_source"],
             savedir=str(cache_dir),
             run_opts={"device": self.device},
+            # Keep actual model files in the project cache.  The SpeechBrain
+            # default is SYMLINK, whose target can be a user-specific HF cache.
+            local_strategy=LocalStrategy.COPY,
         )
+
+    @staticmethod
+    def _discard_broken_cache(cache_dir: Path) -> None:
+        """Remove only a VAD cache whose YAML is a stale local-cache path."""
+        hparams = cache_dir / "hyperparams.yaml"
+        if not hparams.exists() and not hparams.is_symlink():
+            return
+
+        try:
+            contents = hparams.read_text(encoding="utf-8").strip()
+        except OSError:
+            contents = ""
+
+        # A normal HyperPyYAML file is never just an absolute cache path.
+        stale_path = re.fullmatch(r"(?:[A-Za-z]:[\\/]|/).+", contents)
+        if hparams.is_symlink() or stale_path:
+            shutil.rmtree(cache_dir)
 
     def trim(self, audio_path: str | Path) -> torch.Tensor:
         """Return mono 16-kHz speech-only waveform [1, time]. Falls back to original."""
