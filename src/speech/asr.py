@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import lru_cache
+from threading import Lock
 from faster_whisper import WhisperModel
 
 from src.config import load_settings
@@ -35,6 +35,20 @@ class FasterWhisperService:
         }
 
 
-@lru_cache(maxsize=1)
+_asr_instance: FasterWhisperService | None = None
+_asr_initialization_lock = Lock()
+
+
 def get_asr() -> FasterWhisperService:
-    return FasterWhisperService()
+    """Create the ASR model once, including during overlapping Streamlit reruns.
+
+    ``lru_cache`` does not serialize concurrent cache misses.  On a cold model
+    cache that could start two Hugging Face downloads, which races tqdm's
+    process-global progress-bar lock.
+    """
+    global _asr_instance
+    if _asr_instance is None:
+        with _asr_initialization_lock:
+            if _asr_instance is None:
+                _asr_instance = FasterWhisperService()
+    return _asr_instance
