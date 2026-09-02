@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.config import load_thresholds
+from src.config import get_database_config, load_thresholds, supabase_project_ref
 from src.database.db import init_db
 from src.database.repositories import (
     create_user,
@@ -35,6 +35,17 @@ from src.speech.preprocessing import save_uploaded_audio
 
 init_db()
 st.set_page_config(page_title="Secure Student Assistant", layout="wide")
+
+database_config = get_database_config()
+with st.sidebar:
+    if database_config.backend == "supabase":
+        st.caption("Database backend: Supabase")
+        st.caption(
+            f"Supabase project: {supabase_project_ref(database_config.supabase_url) or 'unavailable'}"
+        )
+    else:
+        st.caption("Database backend: SQLite (local)")
+        st.warning("Using local SQLite database. Data is not shared across machines.")
 
 st.title("Secure Student Virtual Assistant")
 thresholds = load_thresholds()

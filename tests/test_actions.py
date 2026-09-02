@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 
+from src import config
 from src.database.db import init_db
 from src.database import db as db_module
 from src.database.repositories import (
@@ -16,6 +17,8 @@ from src.assistant.actions import execute_action
 
 def test_core_actions_with_temp_db(tmp_path, monkeypatch):
     # Redirect database config through db_path() itself for an isolated test.
+    monkeypatch.setattr(config, "ENV_PATH", tmp_path / "missing.env")
+    monkeypatch.setenv("DATABASE_BACKEND", "sqlite")
     monkeypatch.setattr(db_module, "db_path", lambda: tmp_path / "test.db")
     init_db()
 

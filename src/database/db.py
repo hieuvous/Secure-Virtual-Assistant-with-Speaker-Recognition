@@ -1,21 +1,15 @@
 from __future__ import annotations
 
 import sqlite3
-import os
 from contextlib import contextmanager
 from pathlib import Path
 
-from src.config import load_settings, project_path
+from src.config import ConfigurationError, get_database_config, load_settings, project_path
 
 
 def database_backend() -> str:
-    """Return the configured database backend, defaulting to SQLite for local use."""
-    backend = os.getenv("DATABASE_BACKEND", "sqlite").strip().lower()
-    if backend not in {"sqlite", "supabase"}:
-        raise RuntimeError(
-            "DATABASE_BACKEND must be either 'sqlite' or 'supabase'."
-        )
-    return backend
+    """Return the already-bootstrapped, validated effective backend."""
+    return get_database_config().backend
 
 
 def db_path() -> Path:
@@ -24,6 +18,10 @@ def db_path() -> Path:
 
 @contextmanager
 def connect():
+    if database_backend() != "sqlite":
+        raise ConfigurationError(
+            "SQLite connection requested while DATABASE_BACKEND is not 'sqlite'."
+        )
     path = db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
