@@ -28,13 +28,17 @@ from src.database.repositories import (
     add_private_note,
     get_private_notes,
 )
-from src.pipeline import process_request
-from src.speaker.model import get_ecapa
-from src.speaker.profile import create_speaker_profile
-from src.speech.preprocessing import save_uploaded_audio
 
-init_db()
 st.set_page_config(page_title="Secure Student Assistant", layout="wide")
+
+
+@st.cache_resource(show_spinner=False)
+def initialize_database() -> None:
+    """Bootstrap the selected backend once per Streamlit server process."""
+    init_db()
+
+
+initialize_database()
 
 database_config = get_database_config()
 with st.sidebar:
@@ -50,13 +54,47 @@ with st.sidebar:
 st.title("Secure Student Virtual Assistant")
 thresholds = load_thresholds()
 
+
+@st.cache_data(ttl=30, show_spinner=False)
+def load_users() -> list[dict]:
+    """Share one Supabase users query across the tabs in a script run."""
+    return list_users()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def load_tasks(user_id: int) -> list[dict]:
+    return get_tasks(user_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def load_schedule(user_id: int) -> list[dict]:
+    return get_schedule(user_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def load_private_notes(user_id: int) -> list[dict]:
+    return get_private_notes(user_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def load_audit_logs() -> list[dict]:
+    return list_audit_logs(20)
+
+
+def clear_user_data_cache() -> None:
+    load_users.clear()
+    load_tasks.clear()
+    load_schedule.clear()
+    load_private_notes.clear()
+    load_audit_logs.clear()
+
 if thresholds.get("sid_status") == "NEEDS_CALIBRATION":
     st.warning(
         "SV threshold đã được calibrate từ DEV all-impostor. "
         "SID threshold vẫn cần calibrate riêng; trước đó SID chỉ dùng SV threshold làm fallback tạm."
     )
 
-users = list_users()
+users = load_users()
 user_options = {f"{u['id']} - {u['name']}": u["id"] for u in users}
 
 tab_assistant, tab_enroll, tab_data, tab_status = st.tabs(
@@ -87,6 +125,8 @@ with tab_assistant:
     audio = st.audio_input("Nói một lệnh tiếng Việt", sample_rate=16000)
 
     if audio is not None and st.button("Process request", type="primary"):
+        from src.speech.preprocessing import save_uploaded_audio
+
         runtime = ROOT / "data" / "runtime"
         runtime.mkdir(parents=True, exist_ok=True)
         path = runtime / f"query_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.wav"
@@ -94,6 +134,8 @@ with tab_assistant:
 
         with st.spinner("Đang xử lý ASR + speaker recognition..."):
             try:
+                from src.pipeline import process_request
+
                 result = process_request(str(path), active_user_id=active_user_id)
                 st.write("**Transcript:**", result["transcription"]["text"])
                 st.write("**Intent:**", result["nlu"]["intent"])
@@ -121,6 +163,7 @@ with tab_enroll:
         else:
             try:
                 uid = create_user(new_name.strip(), new_code.strip() or None)
+                clear_user_data_cache()
                 st.success(f"Created user_id={uid}. Reload page to enroll.")
             except Exception as exc:
                 st.exception(exc)
@@ -142,7 +185,7 @@ with tab_enroll:
             "hãy tạo configs/enrollment_sentences.json bằng script selection."
         )
 
-    users = list_users()
+    users = load_users()
     user_options = {f"{u['id']} - {u['name']}": u["id"] for u in users}
     if not user_options:
         st.info("Create a user first.")
@@ -169,6 +212,8 @@ with tab_enroll:
             if any(x is None for x in samples):
                 st.error("Record all 5 samples first.")
             else:
+                from src.speech.preprocessing import save_uploaded_audio
+
                 enroll_dir = ROOT / "data" / "users" / str(uid) / "enrollment"
                 enroll_dir.mkdir(parents=True, exist_ok=True)
                 paths = []
@@ -178,6 +223,9 @@ with tab_enroll:
                     paths.append(str(path))
 
                 with st.spinner("Extracting VAD + ECAPA embeddings..."):
+                    from src.speaker.model import get_ecapa
+                    from src.speaker.profile import create_speaker_profile
+
                     profile = create_speaker_profile(uid, paths)
                     ecapa = get_ecapa()
                     model_version = (
@@ -196,6 +244,7 @@ with tab_enroll:
                         model_version,
                         enrollment_method=enrollment_method,
                     )
+                    clear_user_data_cache()
                 st.success(
                     f"Enrollment complete: {profile['num_samples']} samples, "
                     f"embedding dim={profile['embedding_dim']}, "
@@ -207,7 +256,7 @@ with tab_enroll:
             "Nhập dữ liệu cá nhân để assistant có thể trả lời task, lịch học và ghi chú."
         )
 
-        data_users = list_users()
+        data_users = load_users()
 
         if not data_users:
             st.info("Hãy tạo user trong tab Speaker Enrollment trước.")
@@ -254,6 +303,8 @@ with tab_enroll:
                             task_title.strip(),
                             task_due.strip() or None,
                         )
+                        load_tasks.clear()
+                        load_audit_logs.clear()
                         st.success("Đã thêm deadline.")
 
             # =========================================================
@@ -296,6 +347,8 @@ with tab_enroll:
                             end_time.strip() or None,
                             location.strip() or None,
                         )
+                        load_schedule.clear()
+                        load_audit_logs.clear()
                         st.success("Đã thêm lịch học.")
 
             # =========================================================
@@ -326,6 +379,8 @@ with tab_enroll:
                             note_title.strip() or "Ghi chú",
                             note_content.strip(),
                         )
+                        load_private_notes.clear()
+                        load_audit_logs.clear()
                         st.success("Đã thêm ghi chú.")
 
             # =========================================================
@@ -334,24 +389,30 @@ with tab_enroll:
 
             st.divider()
             st.markdown("### Current data")
+            data_loaded_key = f"current_data_loaded_{data_uid}"
+            if st.button("Load current data", key=f"load_current_data_{data_uid}"):
+                st.session_state[data_loaded_key] = True
 
-            st.write("**Tasks**")
-            st.dataframe(
-                get_tasks(data_uid),
-                use_container_width=True,
-            )
+            # Streamlit renders every tab on each run.  Do not issue these
+            # Supabase requests until the user has actually opened this data.
+            if st.session_state.get(data_loaded_key, False):
+                st.write("**Tasks**")
+                st.dataframe(
+                    load_tasks(data_uid),
+                    use_container_width=True,
+                )
 
-            st.write("**Schedules**")
-            st.dataframe(
-                get_schedule(data_uid),
-                use_container_width=True,
-            )
+                st.write("**Schedules**")
+                st.dataframe(
+                    load_schedule(data_uid),
+                    use_container_width=True,
+                )
 
-            st.write("**Private notes**")
-            st.dataframe(
-                get_private_notes(data_uid),
-                use_container_width=True,
-            )
+                st.write("**Private notes**")
+                st.dataframe(
+                    load_private_notes(data_uid),
+                    use_container_width=True,
+                )
 
 with tab_status:
     st.subheader("Released Speaker Verification results")
@@ -383,4 +444,7 @@ with tab_status:
     st.json(thresholds)
 
     st.subheader("Recent audit logs")
-    st.dataframe(list_audit_logs(20), use_container_width=True)
+    if st.button("Load recent audit logs"):
+        st.session_state["audit_logs_loaded"] = True
+    if st.session_state.get("audit_logs_loaded", False):
+        st.dataframe(load_audit_logs(), use_container_width=True)

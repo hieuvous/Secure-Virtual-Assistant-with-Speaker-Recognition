@@ -11,11 +11,11 @@ speaker:
   vad_cache_dir: models/vad_crdnn
 
 asr:
-  model_size: medium
+  model_size: turbo
   device: cpu
   compute_type: int8
   language: vi
-  beam_size: 5
+  beam_size: 3
 
 database:
   path: data/app.db

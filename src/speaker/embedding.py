@@ -5,9 +5,6 @@ import json
 import numpy as np
 
 from src.config import load_settings
-from src.speech.preprocessing import load_mono_16k
-from src.speech.vad import get_vad
-from src.speaker.model import get_ecapa
 
 
 def l2_normalize(x: np.ndarray) -> np.ndarray:
@@ -39,6 +36,12 @@ def embedding_to_pgvector(value, dimension: int = 192) -> str:
 
 
 def extract_embedding(audio_path: str | Path, use_vad: bool | None = None) -> np.ndarray:
+    # Vector conversion is used by repository reads during UI rendering.  Keep
+    # the audio/model stack lazy so it starts only for an actual request.
+    from src.speech.preprocessing import load_mono_16k
+    from src.speech.vad import get_vad
+    from src.speaker.model import get_ecapa
+
     cfg = load_settings()["speaker"]
     if use_vad is None:
         use_vad = bool(cfg.get("use_vad", True))
