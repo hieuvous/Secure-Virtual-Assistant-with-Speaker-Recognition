@@ -30,7 +30,28 @@ from src.database.repositories import (
 )
 
 st.set_page_config(page_title="Secure Student Assistant", layout="wide")
+st.markdown(
+    """
+    <style>
 
+    /* Tăng kích thước nút microphone */
+    [data-testid="stAudioInput"] button {
+        width: 64px !important;
+        height: 64px !important;
+        min-width: 64px !important;
+        min-height: 64px !important;
+        border-radius: 50% !important;
+    }
+
+    [data-testid="stAudioInput"] button svg {
+        width: 30px !important;
+        height: 30px !important;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 @st.cache_resource(show_spinner=False)
 def initialize_database() -> None:
@@ -53,7 +74,54 @@ with st.sidebar:
 
 st.title("Secure Student Virtual Assistant")
 thresholds = load_thresholds()
+COMMAND_EXAMPLES = {
+    "🕐 Xem giờ": [
+        "Bây giờ là mấy giờ?",
+        "Mấy giờ rồi?",
+        "Hiện tại đang là mấy giờ?",
+    ],
 
+    "📅 Xem ngày": [
+        "Hôm nay là ngày mấy?",
+        "Hôm nay thứ mấy ngày mấy?",
+        "Hôm nay là ngày bao nhiêu?",
+    ],
+
+    "🏫 Xem phòng học": [
+        "Môn Machine Learning học phòng nào?",
+        "Phòng học môn Machine Learning ở đâu?",
+        "Machine Learning học ở phòng nào?",
+    ],
+
+    "📝 Xem deadline": [
+        "Tôi còn deadline nào?",
+        "Sắp tới có deadline nào không?",
+        "Tôi còn những task nào chưa làm?",
+    ],
+
+    "📚 Xem lịch học": [
+        "Hôm nay tôi học môn gì?",
+        "Hôm nay tôi còn môn gì?",
+        "Lịch học ngày mai của tôi thế nào?",
+    ],
+
+    "🔒 Xem ghi chú riêng": [
+        "Đọc ghi chú riêng của tôi.",
+        "Xem lại các ghi chú của tôi.",
+    ],
+
+    "➕ Thêm task": [
+        "Thêm deadline Báo cáo NLP.",
+        "Thêm task học toán vào ngày mai.",
+        "Tạo deadline Báo cáo NLP lúc 9h ngày 3 tháng 9.",
+    ],
+
+    "🗑️ Xóa task": [
+        "Xóa deadline Báo cáo NLP.",
+        "Bỏ task Báo cáo NLP đi.",
+        "Xóa Báo cáo NLP lúc 9h ngày 3 tháng 9.",
+    ],
+}
 
 @st.cache_data(ttl=30, show_spinner=False)
 def load_users() -> list[dict]:
@@ -109,9 +177,23 @@ tab_assistant, tab_enroll, tab_data, tab_status = st.tabs(
 with tab_assistant:
     st.subheader("Voice Assistant")
     st.caption(
-        'Demo destructive command nên dùng tiêu đề trong ngoặc kép, ví dụ: '
-        'Xóa deadline "Báo cáo NLP".'
+        "Bạn không cần đọc y hệt câu mẫu. "
+        "Các câu dưới đây chỉ là ví dụ."
     )
+
+    with st.expander(
+        "🎙️ Xem các câu lệnh có thể nói"
+    ):
+        for function_name, examples in COMMAND_EXAMPLES.items():
+
+            st.markdown(
+                f"**{function_name}**"
+            )
+
+            for example in examples:
+                st.markdown(
+                    f"- {example}"
+                )
 
     active_user_id = None
     if user_options:
@@ -137,7 +219,26 @@ with tab_assistant:
                 from src.pipeline import process_request
 
                 result = process_request(str(path), active_user_id=active_user_id)
+                # Pipeline tạo audit log cho mọi request.
+                load_audit_logs.clear()
+
+                # Voice command có thay đổi task:
+                # clear cache để tab My Data thấy ngay.
+                if (
+                    result["action"].get("success")
+                    and
+                    result["nlu"]["intent"]
+                    in {
+                        "ADD_TASK",
+                        "DELETE_TASK",
+                    }
+                ):
+                    load_tasks.clear()
                 st.write("**Transcript:**", result["transcription"]["text"])
+                st.write(
+                    "**ASR processing time:**",
+                    f'{result["transcription"].get("elapsed_seconds", 0):.2f}s',
+                )
                 st.write("**Intent:**", result["nlu"]["intent"])
                 st.write("**Auth:**", result["auth_requirement"])
                 st.write("**Speaker result:**", result["speaker"])

@@ -204,6 +204,59 @@ def delete_task_by_title(user_id: int, title: str) -> int:
         )
         return int(cur.rowcount)
 
+def delete_task_by_id(
+    user_id: int,
+    task_id: int,
+) -> int:
+
+    if _is_supabase():
+
+        # Chỉ cho phép xóa task
+        # của đúng user.
+        exists = any(
+            int(task["id"])
+            == int(task_id)
+            for task in get_tasks(
+                user_id
+            )
+        )
+
+        if not exists:
+            return 0
+
+        (
+            _client()
+            .table("tasks")
+            .delete()
+            .eq(
+                "id",
+                int(task_id),
+            )
+            .eq(
+                "user_id",
+                int(user_id),
+            )
+            .execute()
+        )
+
+        return 1
+
+    with connect() as conn:
+
+        cur = conn.execute(
+            """
+            DELETE FROM tasks
+            WHERE id=? AND user_id=?
+            """,
+            (
+                int(task_id),
+                int(user_id),
+            ),
+        )
+
+        return int(
+            cur.rowcount
+        )
 
 def add_private_note(user_id: int, title: str, content: str) -> int:
     if _is_supabase():

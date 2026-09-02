@@ -17,5 +17,14 @@ asr:
   language: vi
   beam_size: 3
 
+  initial_prompt: >
+    Trợ lý sinh viên bằng tiếng Việt. Các từ thường gặp gồm deadline,
+    task, NLP, Machine Learning, báo cáo, lịch học, phòng học, ghi chú,
+    hôm qua, hôm nay, ngày mai, thêm, xóa và hủy.
+
+  hotwords: >
+    deadline, task, NLP, Machine Learning, báo cáo, lịch học,
+    phòng học, ghi chú, hôm qua, hôm nay, ngày mai, thêm, xóa, hủy
+
 database:
   path: data/app.db
