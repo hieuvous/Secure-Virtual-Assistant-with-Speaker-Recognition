@@ -1,10 +1,13 @@
 {
-  "sv_threshold": 0.1566438227891922,
-  "sv_eer_threshold": 0.1566438227891922,
-  "sv_status": "TUNED_FROM_DEV_ALL_IMPOSTOR_OLD_PROTOCOL",
-  "sv_source": "models/config.json + results/all_impostor_metrics.json",
-  "sid_threshold": null,
-  "sid_status": "NEEDS_CALIBRATION",
-  "sid_source": null,
-  "sid_note": "Run training/evaluate_identification.py. Do not use SV threshold as SID fallback."
+  "sv_threshold": 0.19788894057273865,
+  "sv_eer_threshold": 0.16273680329322815,
+  "sv_status": "TUNED_FROM_DEV_PROFILE_ALL_IMPOSTOR",
+  "sv_source": "results/calibration/sv_dev_recalibrated.json",
+  "sid_threshold": 0.2856859266757965,
+  "sid_status": "TUNED_FROM_DEV_OPEN_SET",
+  "sid_source": "results/calibration/sid_dev_recalibrated.json",
+  "sid_note": "Calibrated on DEV open-set protocol with target unknown FAR <= 0.05.",
+  "sv_eer": 0.08333333333333333,
+  "sid_gallery_speakers": 5,
+  "sid_target_unknown_far": 0.05
 }

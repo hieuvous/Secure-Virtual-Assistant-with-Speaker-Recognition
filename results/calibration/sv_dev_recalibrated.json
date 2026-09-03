@@ -1,0 +1,35 @@
+{
+  "eer": 0.08333333333333333,
+  "eer_threshold": 0.16273680329322815,
+  "far_at_eer_threshold": 0.08333333333333333,
+  "frr_at_eer_threshold": 0.08333333333333333,
+  "target_far_operating_points": {
+    "far_le_10pct": {
+      "threshold": 0.1486309915781021,
+      "far": 0.09996570644718793,
+      "frr": 0.07407407407407407
+    },
+    "far_le_5pct": {
+      "threshold": 0.19788894057273865,
+      "far": 0.049982853223593963,
+      "frr": 0.10185185185185185
+    },
+    "far_le_1pct": {
+      "threshold": 0.2911645770072937,
+      "far": 0.009987997256515776,
+      "frr": 0.18209876543209877
+    }
+  },
+  "protocol": "DEV only; normalized 5-utterance profile; all-impostor query-to-profile trials",
+  "checkpoint": "models/ecapa_vietnamceleb_epoch10.pt",
+  "num_dev_speakers": 37,
+  "enroll_utts_per_speaker": 5,
+  "max_query_utts_per_speaker": 20,
+  "genuine_trials": 648,
+  "impostor_trials": 23328,
+  "vad": true,
+  "vad_source": "speechbrain/vad-crdnn-libriparty",
+  "profile": "L2-normalize each embedding, mean enrollment embeddings, L2-normalize mean",
+  "similarity": "cosine",
+  "seed": 42
+}

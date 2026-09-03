@@ -1,0 +1,29 @@
+{
+  "sid_threshold": 0.2856859266757965,
+  "closed_set_accuracy": 0.8896928154353897,
+  "known_open_set_accuracy": 0.7208682406702208,
+  "unknown_false_accept_rate": 0.04995085853038099,
+  "unknown_rejection_rate": 0.950049141469619,
+  "target_unknown_far": 0.05,
+  "selection_method": "maximize_known_open_set_accuracy_subject_to_unknown_far",
+  "balanced_optimum": {
+    "threshold": 0.2677314877510071,
+    "known_open_set_accuracy": 0.7438436151307438,
+    "unknown_false_accept_rate": 0.06845117650459617,
+    "unknown_rejection_rate": 0.9315488234954038,
+    "balanced_score": 0.8376962193130738
+  },
+  "gallery_speakers": 5,
+  "unknown_speakers": 10,
+  "enroll_utts_per_speaker": 5,
+  "repetitions": 20,
+  "known_queries": 7878,
+  "unknown_queries": 17297,
+  "seed": 42,
+  "vad": true,
+  "vad_source": "speechbrain/vad-crdnn-libriparty",
+  "profile": "L2-normalize each embedding, mean enrollment embeddings, L2-normalize mean",
+  "similarity": "cosine",
+  "checkpoint": "models/ecapa_vietnamceleb_epoch10.pt",
+  "protocol": "DEV only; repeated open-set gallery/unknown sampling"
+}
