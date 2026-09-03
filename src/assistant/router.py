@@ -22,6 +22,8 @@ ASR_ALIASES = {
 def _norm(text: str) -> str:
     text = text.lower().strip()
 
+     # NFD không tự chuyển "đ" thành "d"
+    text = text.replace("đ", "d")
     text = unicodedata.normalize(
         "NFD",
         text,
@@ -59,6 +61,8 @@ def _norm(text: str) -> str:
     )
 
     return text
+
+
 
 
 def _quoted(text: str) -> str | None:
