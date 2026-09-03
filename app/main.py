@@ -158,8 +158,8 @@ def clear_user_data_cache() -> None:
 
 if thresholds.get("sid_status") == "NEEDS_CALIBRATION":
     st.warning(
-        "SV threshold đã được calibrate từ DEV all-impostor. "
-        "SID threshold vẫn cần calibrate riêng; trước đó SID chỉ dùng SV threshold làm fallback tạm."
+        "SID threshold has not been calibrated. Run training/evaluate_identification.py "
+        "before using Speaker Identification."
     )
 
 users = load_users()

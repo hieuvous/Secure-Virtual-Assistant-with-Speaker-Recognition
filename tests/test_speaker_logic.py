@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 from src.speaker.profile import aggregate_embeddings
 from src.speaker.verification import verify_embedding
+from src.speaker import identification
 from src.speaker.identification import identify_embedding
 
 def test_profile_norm():
@@ -16,3 +18,9 @@ def test_sid_logic():
         {"user_id":2,"name":"B","embedding":np.array([0.,1.])}]
     assert identify_embedding(np.array([.9,.1]),ps,.8)["user_id"]==1
     assert identify_embedding(np.array([-1.,-1.]),ps,.5)["is_unknown"]
+
+
+def test_sid_runtime_requires_calibrated_sid_threshold(monkeypatch):
+    monkeypatch.setattr(identification, "load_thresholds", lambda: {"sid_threshold": None})
+    with pytest.raises(RuntimeError, match="SID threshold has not been calibrated"):
+        identification.identify_speaker("unused.wav", [])

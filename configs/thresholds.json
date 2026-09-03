@@ -1,8 +1,10 @@
 {
   "sv_threshold": 0.1566438227891922,
-  "sv_status": "TUNED_FROM_DEV_ALL_IMPOSTOR",
+  "sv_eer_threshold": 0.1566438227891922,
+  "sv_status": "TUNED_FROM_DEV_ALL_IMPOSTOR_OLD_PROTOCOL",
   "sv_source": "models/config.json + results/all_impostor_metrics.json",
   "sid_threshold": null,
   "sid_status": "NEEDS_CALIBRATION",
-  "sid_note": "Run training/evaluate_identification.py. Until then the app uses SV threshold only as a clearly marked provisional SID fallback."
+  "sid_source": null,
+  "sid_note": "Run training/evaluate_identification.py. Do not use SV threshold as SID fallback."
 }

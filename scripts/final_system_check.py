@@ -79,12 +79,12 @@ def main():
 
     t = load_thresholds()
     passed &= check(
-        t.get("sv_status") == "TUNED_FROM_DEV_ALL_IMPOSTOR",
+        str(t.get("sv_status", "")).startswith("TUNED_FROM_DEV"),
         "SV threshold is calibrated",
         "SV threshold status is not final",
     )
 
-    if t.get("sid_status") == "TUNED_FROM_DEV" and t.get("sid_threshold") is not None:
+    if str(t.get("sid_status", "")).startswith("TUNED_FROM_DEV") and t.get("sid_threshold") is not None:
         print("[PASS] SID threshold calibrated:", t["sid_threshold"])
     else:
         print("[WARN] SID threshold is not calibrated yet. Run training/evaluate_identification.py.")

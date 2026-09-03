@@ -47,13 +47,12 @@ def _legacy_embedding(profile: dict) -> np.ndarray | None:
 
 
 def identify_speaker(audio_path: str, profiles: list[dict], threshold: float | None = None) -> dict:
-    thresholds = load_thresholds()
-    calibrated = True
     if threshold is None:
-        threshold = thresholds.get("sid_threshold")
+        threshold = load_thresholds().get("sid_threshold")
         if threshold is None:
-            threshold = float(thresholds["sv_threshold"])
-            calibrated = False
+            raise RuntimeError(
+                "SID threshold has not been calibrated. Run training/evaluate_identification.py first."
+            )
 
     loaded = []
     for profile in profiles:
@@ -70,6 +69,6 @@ def identify_speaker(audio_path: str, profiles: list[dict], threshold: float | N
     result = identify_embedding(
         extract_embedding(audio_path, use_vad=True), loaded, float(threshold)
     )
-    result["sid_threshold_calibrated"] = calibrated
-    result["threshold_source"] = "SID_DEV" if calibrated else "PROVISIONAL_SV_FALLBACK"
+    result["sid_threshold_calibrated"] = True
+    result["threshold_source"] = "SID_DEV"
     return result
