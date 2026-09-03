@@ -63,14 +63,10 @@ initialize_database()
 
 database_config = get_database_config()
 with st.sidebar:
-    if database_config.backend == "supabase":
-        st.caption("Database backend: Supabase")
-        st.caption(
-            f"Supabase project: {supabase_project_ref(database_config.supabase_url) or 'unavailable'}"
-        )
-    else:
-        st.caption("Database backend: SQLite (local)")
-        st.warning("Using local SQLite database. Data is not shared across machines.")
+    st.caption("Database backend: Supabase")
+    st.caption(
+        f"Supabase project: {supabase_project_ref(database_config.supabase_url) or 'unavailable'}"
+    )
 
 st.title("Secure Student Virtual Assistant")
 thresholds = load_thresholds()

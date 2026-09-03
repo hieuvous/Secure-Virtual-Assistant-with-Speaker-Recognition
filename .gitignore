@@ -34,7 +34,6 @@ models/vad_crdnn/
 *.npy
 
 # Nhưng cho phép speaker embeddings dùng chung
-!data/users/**/speaker_embedding.npy
 
 # =========================
 # Database
@@ -46,7 +45,6 @@ models/vad_crdnn/
 *.sqlite3
 
 # Nhưng cho phép database chính dùng chung
-data/app.db
 
 # =========================
 # Runtime / temporary files

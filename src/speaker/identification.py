@@ -1,8 +1,4 @@
-from pathlib import Path
-
-import numpy as np
-
-from src.config import ROOT, load_thresholds
+from src.config import load_thresholds
 from src.speaker.embedding import embedding_to_numpy, extract_embedding
 from src.speaker.scoring import cosine_score
 
@@ -35,17 +31,6 @@ def identify_embedding(query, profiles: list[dict], threshold: float) -> dict:
     }
 
 
-def _legacy_embedding(profile: dict) -> np.ndarray | None:
-    """Read old SQLite path records only when no database vector is present."""
-    path_value = profile.get("embedding_path")
-    if not path_value:
-        return None
-    path = Path(path_value)
-    if not path.is_absolute():
-        path = ROOT / path
-    return embedding_to_numpy(np.load(path)) if path.exists() else None
-
-
 def identify_speaker(audio_path: str, profiles: list[dict], threshold: float | None = None) -> dict:
     if threshold is None:
         threshold = load_thresholds().get("sid_threshold")
@@ -57,8 +42,6 @@ def identify_speaker(audio_path: str, profiles: list[dict], threshold: float | N
     loaded = []
     for profile in profiles:
         embedding = profile.get("embedding")
-        if embedding is None:
-            embedding = _legacy_embedding(profile)
         if embedding is not None:
             loaded.append({
                 "user_id": int(profile["user_id"]),

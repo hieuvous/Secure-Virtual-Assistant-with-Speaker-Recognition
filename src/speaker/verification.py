@@ -1,8 +1,6 @@
-from pathlib import Path
-
 import numpy as np
 
-from src.config import ROOT, load_thresholds
+from src.config import load_thresholds
 from src.speaker.embedding import embedding_to_numpy, extract_embedding
 from src.speaker.scoring import cosine_score
 
@@ -17,14 +15,12 @@ def verify_embedding(query, reference, threshold: float) -> dict:
 
 
 def _reference_to_numpy(reference_embedding) -> np.ndarray:
-    """Accept a database vector and retain old SQLite path compatibility."""
-    if isinstance(reference_embedding, (str, Path)) and not str(reference_embedding).lstrip().startswith("["):
-        path = Path(reference_embedding)
-        if not path.is_absolute():
-            path = ROOT / path
-        if not path.exists():
-            raise FileNotFoundError(f"Speaker profile not found: {path}")
-        return embedding_to_numpy(np.load(path))
+    """Convert a Supabase pgvector/list/array profile to a NumPy vector."""
+    if isinstance(reference_embedding, str) and not reference_embedding.lstrip().startswith("["):
+        raise RuntimeError(
+            "Local speaker embedding paths are no longer supported. "
+            "Fetch speaker_profiles.embedding from Supabase."
+        )
     return embedding_to_numpy(reference_embedding)
 
 

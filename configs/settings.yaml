@@ -25,6 +25,3 @@ asr:
   hotwords: >
     deadline, task, NLP, Machine Learning, báo cáo, lịch học,
     phòng học, ghi chú, hôm qua, hôm nay, ngày mai, thêm, xóa, hủy
-
-database:
-  path: data/app.db

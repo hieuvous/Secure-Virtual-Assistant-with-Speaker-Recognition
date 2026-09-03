@@ -45,15 +45,18 @@ def get_database_config() -> DatabaseConfig:
     raw_backend = os.getenv("DATABASE_BACKEND")
     if raw_backend is None or not raw_backend.strip():
         raise ConfigurationError(
-            "DATABASE_BACKEND is required. Set it explicitly to 'supabase' or "
-            "'sqlite' in the project .env or process environment."
+            "DATABASE_BACKEND is required. Set it explicitly to 'supabase' "
+            "in the project .env or process environment."
         )
 
     backend = raw_backend.strip().lower()
-    if backend not in {"sqlite", "supabase"}:
-        raise ConfigurationError("DATABASE_BACKEND must be either 'sqlite' or 'supabase'.")
     if backend == "sqlite":
-        return DatabaseConfig(backend="sqlite")
+        raise ConfigurationError(
+            "SQLite runtime backend has been removed. "
+            "Set DATABASE_BACKEND=supabase."
+        )
+    if backend != "supabase":
+        raise ConfigurationError("DATABASE_BACKEND must be 'supabase'.")
 
     url = os.getenv("SUPABASE_URL")
     secret_key = os.getenv("SUPABASE_SECRET_KEY")

@@ -10,7 +10,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.config import ConfigurationError, ENV_PATH, get_database_config, supabase_project_ref
-from src.database.db import db_path
 
 
 def main() -> int:
@@ -24,16 +23,10 @@ def main() -> int:
 
     print(f"Configured backend: {config.backend}")
     print(f"Effective backend: {config.backend}")
-    if config.backend == "supabase":
-        print(f"Supabase URL configured: {bool(config.supabase_url)}")
-        print(f"Supabase secret configured: {bool(config.supabase_secret_key)}")
-        print(f"Supabase project ref: {supabase_project_ref(config.supabase_url) or 'unavailable'}")
-        print("SQLite path: N/A")
-    else:
-        print("Supabase URL configured: False")
-        print("Supabase secret configured: False")
-        print("Supabase project ref: N/A")
-        print(f"SQLite path: {db_path()}")
+    print(f"Supabase URL configured: {bool(config.supabase_url)}")
+    print(f"Supabase secret configured: {bool(config.supabase_secret_key)}")
+    print(f"Supabase project ref: {supabase_project_ref(config.supabase_url) or 'unavailable'}")
+    print("SQLite path: N/A (SQLite runtime backend removed)")
     return 0
 
 

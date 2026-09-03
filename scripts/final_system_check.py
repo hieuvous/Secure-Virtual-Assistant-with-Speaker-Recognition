@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.assistant.router import detect_intent
 from src.config import load_thresholds
-from src.database.db import init_db, db_path
+from src.database.db import init_db, database_backend
 
 
 def check(condition: bool, ok: str, fail: str):
@@ -64,7 +64,11 @@ def main():
     )
 
     init_db()
-    passed &= check(db_path().exists(), f"Database initialized at {db_path()}", "DB init failed")
+    passed &= check(
+        database_backend() == "supabase",
+        "Supabase runtime client initialized",
+        "Supabase runtime client initialization failed",
+    )
 
     router_cases = {
         "Bây giờ là mấy giờ?": "GET_TIME",
