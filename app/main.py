@@ -9,6 +9,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from src.speech.tts import text_to_speech
 
 from src.config import get_database_config, load_thresholds, supabase_project_ref
 from src.database.db import init_db
@@ -232,10 +233,31 @@ with tab_assistant:
                 st.write("**Auth:**", result["auth_requirement"])
                 st.write("**Speaker result:**", result["speaker"])
                 st.write("**Allowed:**", result["allowed"])
+                # if result["action"]["success"]:
+                #     st.success(result["action"]["message"])
+                # else:
+                #     st.error(result["action"]["message"])
+                message = result["action"]["message"]
+
                 if result["action"]["success"]:
-                    st.success(result["action"]["message"])
+                    st.success(message)
                 else:
-                    st.error(result["action"]["message"])
+                    st.error(message)
+
+                # TTS
+                try:
+                    tts_audio = text_to_speech(message)
+
+                    if tts_audio:
+                        st.audio(
+                            tts_audio,
+                            format="audio/mp3",
+                            autoplay=True,
+                        )
+
+                except Exception as exc:
+                    # TTS lỗi không được làm hỏng assistant
+                    st.warning(f"TTS unavailable: {exc}")
             except Exception as exc:
                 st.exception(exc)
 
