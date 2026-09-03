@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
 
 import streamlit as st
 
@@ -17,7 +16,6 @@ from src.database.repositories import (
     create_user,
     list_audit_logs,
     list_users,
-    upsert_profile,
 
     add_task,
     get_tasks,
@@ -203,18 +201,13 @@ with tab_assistant:
     audio = st.audio_input("Nói một lệnh tiếng Việt", sample_rate=16000)
 
     if audio is not None and st.button("Process request", type="primary"):
-        from src.speech.preprocessing import save_uploaded_audio
-
-        runtime = ROOT / "data" / "runtime"
-        runtime.mkdir(parents=True, exist_ok=True)
-        path = runtime / f"query_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.wav"
-        save_uploaded_audio(audio, path)
-
         with st.spinner("Đang xử lý ASR + speaker recognition..."):
             try:
-                from src.pipeline import process_request
+                from src.pipeline import process_request_recording
 
-                result = process_request(str(path), active_user_id=active_user_id)
+                result = process_request_recording(
+                    audio.getvalue(), active_user_id=active_user_id
+                )
                 # Pipeline tạo audit log cho mọi request.
                 load_audit_logs.clear()
 
@@ -290,7 +283,22 @@ with tab_enroll:
         selected_user = st.selectbox("User to enroll", list(user_options.keys()))
         uid = user_options[selected_user]
 
-        samples = []
+        if message := st.session_state.pop("enrollment_success_message", None):
+            st.success(message)
+
+        # Streamlit reruns after each recording interaction. Keep raw bytes in
+        # session memory only until this user has completed enrollment; do not
+        # materialize any WAV until the user presses the profile button.
+        previous_uid = st.session_state.get("enrollment_active_user_id")
+        if previous_uid is not None and previous_uid != uid:
+            st.session_state.pop(f"enrollment_recordings_{previous_uid}", None)
+        st.session_state["enrollment_active_user_id"] = uid
+
+        generation_key = f"enrollment_generation_{uid}"
+        generation = int(st.session_state.get(generation_key, 0))
+        recordings_key = f"enrollment_recordings_{uid}"
+        recordings_by_index = st.session_state.setdefault(recordings_key, {})
+
         sentences = (sentence_cfg or {}).get("sentences", [])
         for i in range(1, 6):
             label = (
@@ -301,52 +309,52 @@ with tab_enroll:
             sample = st.audio_input(
                 label,
                 sample_rate=16000,
-                key=f"enroll_{uid}_{i}",
+                key=f"enroll_{uid}_{generation}_{i}",
             )
-            samples.append(sample)
+            if sample is not None:
+                recordings_by_index[i] = bytes(sample.getvalue())
+
+        recordings = [recordings_by_index.get(i) for i in range(1, 6)]
 
         if st.button("Create / replace speaker profile", type="primary"):
-            if any(x is None for x in samples):
+            if any(recording is None for recording in recordings):
                 st.error("Record all 5 samples first.")
             else:
-                from src.speech.preprocessing import save_uploaded_audio
-
-                enroll_dir = ROOT / "data" / "users" / str(uid) / "enrollment"
-                enroll_dir.mkdir(parents=True, exist_ok=True)
-                paths = []
-                for i, sample in enumerate(samples, start=1):
-                    path = enroll_dir / f"sample_{i}.wav"
-                    save_uploaded_audio(sample, path)
-                    paths.append(str(path))
-
                 with st.spinner("Extracting VAD + ECAPA embeddings..."):
-                    from src.speaker.model import get_ecapa
-                    from src.speaker.profile import create_speaker_profile
+                    try:
+                        from src.speaker.enrollment import enroll_speaker_from_recordings
+                        from src.speaker.model import get_ecapa
 
-                    profile = create_speaker_profile(uid, paths)
-                    ecapa = get_ecapa()
-                    model_version = (
-                        "finetuned_epoch10"
-                        if ecapa.using_finetuned
-                        else "pretrained_voxceleb"
-                    )
-                    enrollment_method = (
-                        (sentence_cfg or {}).get("method")
-                        or "fixed_5_mean"
-                    )
-                    upsert_profile(
-                        uid,
-                        profile["embedding"],
-                        profile["num_samples"],
-                        model_version,
-                        enrollment_method=enrollment_method,
-                    )
-                    clear_user_data_cache()
-                st.success(
-                    f"Enrollment complete: {profile['num_samples']} samples, "
-                    f"embedding dim={profile['embedding_dim']}, "
-                    f"model={model_version}, method={enrollment_method}"
-                )
+                        ecapa = get_ecapa()
+                        model_version = (
+                            "finetuned_epoch10"
+                            if ecapa.using_finetuned
+                            else "pretrained_voxceleb"
+                        )
+                        enrollment_method = (
+                            (sentence_cfg or {}).get("method")
+                            or "fixed_5_mean"
+                        )
+                        profile = enroll_speaker_from_recordings(
+                            uid,
+                            [recording for recording in recordings if recording is not None],
+                            model_version=model_version,
+                            enrollment_method=enrollment_method,
+                        )
+                        clear_user_data_cache()
+                    except Exception as exc:
+                        st.exception(exc)
+                    else:
+                        st.session_state.pop(recordings_key, None)
+                        # Rendering new widget keys releases the old browser/
+                        # widget recording values after this rerun as well.
+                        st.session_state[generation_key] = generation + 1
+                        st.session_state["enrollment_success_message"] = (
+                            f"Enrollment complete: {profile['num_samples']} samples, "
+                            f"embedding dim={profile['embedding_dim']}, "
+                            f"model={model_version}, method={enrollment_method}"
+                        )
+                        st.rerun()
     with tab_data:
         st.subheader("My Data")
         st.caption(

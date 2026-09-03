@@ -11,6 +11,13 @@ from src.database.repositories import (
 from src.speaker.identification import identify_speaker
 from src.speaker.verification import verify_speaker
 from src.speech.asr import get_asr
+from src.speech.temporary_audio import temporary_audio_path
+
+
+def process_request_recording(recording: bytes, active_user_id: int | None = None) -> dict:
+    """Process one microphone recording while its WAV exists only per request."""
+    with temporary_audio_path(recording, prefix="va_request_", filename="query.wav") as path:
+        return process_request(str(path), active_user_id=active_user_id)
 
 
 def process_request(audio_path: str, active_user_id: int | None = None) -> dict:

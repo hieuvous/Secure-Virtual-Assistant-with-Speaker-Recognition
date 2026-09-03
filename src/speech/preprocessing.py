@@ -20,11 +20,3 @@ def load_mono_16k(audio_path: str | Path) -> torch.Tensor:
     if peak > 1.0:
         wav = wav / peak
     return wav.float()
-
-
-def save_uploaded_audio(uploaded_file, output_path: str | Path) -> Path:
-    """Save a Streamlit UploadedFile/audio_input object."""
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(uploaded_file.getvalue())
-    return output_path

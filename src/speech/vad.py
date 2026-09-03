@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-import hashlib
 import re
 import shutil
+from tempfile import TemporaryDirectory
 
 import torch
 import torchaudio
 from speechbrain.inference.VAD import VAD
 from speechbrain.utils.fetching import LocalStrategy
 
-from src.config import ROOT, load_settings, project_path
+from src.config import load_settings, project_path
 from src.speech.preprocessing import load_mono_16k, TARGET_SR
 
 
@@ -57,31 +57,26 @@ class VADService:
         waveform = load_mono_16k(audio_path)
 
         # VAD works on a canonical 16-kHz WAV so boundary times match waveform indexing.
-        runtime = ROOT / "data" / "runtime" / "vad"
-        runtime.mkdir(parents=True, exist_ok=True)
-        key = hashlib.sha1(
-            (str(audio_path.resolve()) + str(audio_path.stat().st_mtime_ns)).encode("utf-8")
-        ).hexdigest()[:16]
-        canonical = runtime / f"{key}.wav"
-        if not canonical.exists():
+        with TemporaryDirectory(prefix="va_vad_") as directory:
+            canonical = Path(directory) / "canonical.wav"
             torchaudio.save(str(canonical), waveform, TARGET_SR)
 
-        try:
-            boundaries = self.model.get_speech_segments(str(canonical))
-            pieces = []
-            for boundary in boundaries:
-                start = int(float(boundary[0]) * TARGET_SR)
-                end = int(float(boundary[1]) * TARGET_SR)
-                if end > start:
-                    pieces.append(waveform[:, start:end])
+            try:
+                boundaries = self.model.get_speech_segments(str(canonical))
+                pieces = []
+                for boundary in boundaries:
+                    start = int(float(boundary[0]) * TARGET_SR)
+                    end = int(float(boundary[1]) * TARGET_SR)
+                    if end > start:
+                        pieces.append(waveform[:, start:end])
 
-            if pieces:
-                trimmed = torch.cat(pieces, dim=1)
-                # Avoid pathological near-empty VAD output.
-                if trimmed.shape[1] >= int(0.25 * TARGET_SR):
-                    return trimmed
-        except Exception:
-            pass
+                if pieces:
+                    trimmed = torch.cat(pieces, dim=1)
+                    # Avoid pathological near-empty VAD output.
+                    if trimmed.shape[1] >= int(0.25 * TARGET_SR):
+                        return trimmed
+            except Exception:
+                pass
 
         return waveform
 
