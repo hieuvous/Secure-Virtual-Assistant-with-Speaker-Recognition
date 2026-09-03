@@ -2,8 +2,6 @@ torch==2.8.0
 torchaudio==2.8.0
 speechbrain==1.0.3
 huggingface_hub<1.0
-speechbrain==1.0.3
-huggingface_hub<1.0
 faster-whisper==1.2.1
 streamlit==1.61.1
 numpy>=1.26,<3
@@ -14,3 +12,4 @@ soundfile>=0.12
 pytest>=8,<10
 supabase>=2,<3
 python-dotenv>=1,<2
+gTTS>=2.5,<3

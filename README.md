@@ -1,333 +1,150 @@
-# Secure Student Virtual Assistant — Starter
+# Secure Virtual Assistant with Speaker Recognition
 
-Starter code for the **Secure Virtual Assistant with Speaker Recognition** final project.
+Đồ án cuối kỳ: trợ lý ảo tiếng Việt có tương tác bằng giọng nói, Speaker Verification (SV) cho thao tác quan trọng và Speaker Identification (SID) để cá nhân hóa.
 
-## What this ZIP already contains
+## Chức năng
 
-- Local development structure for **VS Code + Python 3.10**
-- SpeechBrain **ECAPA-TDNN pretrained** embedding extraction
-- Speaker enrollment: multiple recordings → normalized mean embedding
-- Speaker Verification (1:1 cosine similarity)
-- Speaker Identification (1:N cosine similarity + unknown rejection)
-- Faster-Whisper ASR wrapper
-- Streamlit microphone UI using `st.audio_input`
-- SQLite schema + basic repositories
-- Rule-based intent router + permission map
-- Kaggle-oriented Vietnam-Celeb subset preparation
-- A practical ECAPA fine-tuning script
-- Verification evaluation script to choose threshold from development data
+- Ghi âm trên giao diện Streamlit, nhận dạng lời nói tiếng Việt bằng Faster-Whisper và đọc phản hồi bằng gTTS.
+- Phân tích câu lệnh theo luật (rule-based intent/entity routing).
+- Chức năng chung không cần xác thực, ví dụ hỏi thông tin hoặc tạo nhắc việc.
+- Chức năng quan trọng chỉ thực thi sau khi SV thành công.
+- Chức năng cá nhân hóa theo người nói đã đăng ký qua SID.
+- Enrollment và quản lý người dùng: thu 5 câu nói, tạo embedding trung bình đã L2-normalize và lưu profile vào Supabase.
 
-This is a **starter**, not the final submission. TTS, phoneme-based enrollment optimization,
-full experiment tables, final report figures, and stronger tests are intentionally left for later iterations.
+## Mô hình và dữ liệu
 
----
+- **Mô hình:** ECAPA-TDNN của SpeechBrain, khởi tạo từ `speechbrain/spkrec-ecapa-voxceleb`.
+- **Fine-tuning dataset:** Vietnam-Celeb, chỉ sử dụng danh sách utterance train chính thức.
+- **Checkpoint phát hành:** `models/ecapa_vietnamceleb_epoch10.pt` (Epoch 10, embedding 192 chiều).
+- **VAD:** `speechbrain/vad-crdnn-libriparty`.
+- **SV:** cosine similarity với ngưỡng DEV all-impostor `0.1566438227891922`.
 
-# 1. Recommended workflow
+### Split fine-tuning đã dùng
 
-Use two environments:
+| Phần dữ liệu | Số speaker | Số utterance |
+| --- | ---: | ---: |
+| Train | 600 | 9,099 |
+| Validation | 600 | 1,077 |
+| Tổng trước split train/validation | 600 | 10,176 |
+| DEV speaker-disjoint | 50 | 688 |
 
-1. **Local / VS Code on Windows**
-   - Streamlit application
-   - pretrained/fine-tuned ECAPA inference
-   - Faster-Whisper ASR
-   - SQLite
-   - enrollment + demo
+Các số liệu này được lưu trong output của `notebooks/finetune_ecapa_colab.ipynb`. DEV và TEST không chồng speaker với tập fine-tuning.
 
-2. **Kaggle GPU**
-   - prepare/check Vietnam-Celeb subset
-   - fine-tune ECAPA
-   - evaluate
-   - export `finetuned_ecapa.pt`
-   - copy checkpoint back to local `models/`
+### Kết quả SV phát hành
 
-The local app automatically uses `models/finetuned_ecapa.pt` if that file exists;
-otherwise it uses the pretrained VoxCeleb ECAPA.
+| Model | DEV EER | TEST EER |
+| --- | ---: | ---: |
+| Pretrained ECAPA | 13.30% | 11.91% |
+| Fine-tuned Epoch 10 | 9.98% | 8.42% |
 
----
+Kết quả TEST được đánh giá với 50 speaker chưa xuất hiện trong dữ liệu fine-tuning.
 
-# 2. Python version
+## Kiến trúc
 
-Recommended: **Python 3.10**
+```text
+Microphone / audio input
+        |
+        +--> Faster-Whisper ASR --> Rule-based router --> action type
+        |                                               |
+        |                    +--------------------------+-------------------------+
+        |                    |                            |                         |
+        |                 General                       SID                     Sensitive
+        |                    |                            |                         |
+        |                 execute               identify speaker              verify speaker
+        |                    |                            |                         |
+        +--------------------+----------------------------+-------------------------+
+                                                     |
+                                           response + gTTS output
+```
 
-On Windows:
+Supabase lưu user, speaker profile embedding, task/note/reminder và audit data. Biến môi trường được nạp từ `.env`; tuyệt đối không commit file này.
+
+## Cài đặt
+
+Yêu cầu: Python 3.10 hoặc mới hơn, microphone và Internet ở lần chạy đầu để tải model SpeechBrain/Faster-Whisper khi chưa có cache.
 
 ```powershell
 py -3.10 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+pip install "gTTS>=2.5,<3"
 ```
 
-In VS Code:
-- Open this project folder.
-- `Ctrl+Shift+P`
-- `Python: Select Interpreter`
-- choose `.venv\Scripts\python.exe`.
+`gTTS` hiện được dùng bởi `src/speech/tts.py`; cần cài thêm nếu chưa được bổ sung vào `requirements.txt`.
 
----
+Tạo `.env` từ `.env.example` và điền cấu hình Supabase:
 
-# 3. Initialize the project
-
-```powershell
-python scripts/init_db.py
-python scripts/seed_demo_data.py
+```env
+DATABASE_BACKEND=supabase
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SECRET_KEY=<secret-key>
 ```
 
-Smoke-test ECAPA:
+Áp dụng schema trong `supabase/schema.sql` bằng Supabase SQL Editor trước khi chạy ứng dụng.
+
+## Chạy và kiểm tra
 
 ```powershell
-python scripts/smoke_test_ecapa.py path\to\your_audio.wav
-```
-
-The first run downloads the pretrained model:
-`speechbrain/spkrec-ecapa-voxceleb`.
-
----
-
-# 4. Run Streamlit locally
-
-```powershell
+python scripts/final_system_check.py
+pytest -q
+python scripts/validate_release_artifacts.py
+python scripts/smoke_test_ecapa.py path\to\audio.wav
 streamlit run app/main.py
 ```
 
-Current starter pages:
+Khi chạy lần đầu, SpeechBrain có thể tạo cache tại `models/pretrained_ecapa/` và `models/vad_crdnn/`. Các cache này có thể xóa và tải lại.
 
-- **Assistant**
-  - record Vietnamese command
-  - ASR
-  - detect intent
-  - GENERAL / IDENTIFICATION / VERIFICATION access control
-  - execute basic actions
+## Quy trình enrollment và xác thực
 
-- **Enrollment**
-  - create/select a user
-  - record 5 enrollment utterances
-  - ECAPA embedding for each utterance
-  - normalized mean embedding
-  - save speaker profile
+1. Tạo hoặc chọn người dùng trên tab Enrollment.
+2. Thu 5 audio enrollment qua giao diện.
+3. Audio được chuẩn hóa/VAD, trích xuất embedding ECAPA và gộp bằng normalized mean embedding.
+4. Profile 192-D được lưu trong Supabase.
+5. Với yêu cầu personal, SID so sánh embedding query với các profile đã đăng ký.
+6. Với yêu cầu sensitive, SV so sánh query với profile mục tiêu; action chỉ chạy khi score vượt ngưỡng cố định từ DEV.
 
-The current thresholds in `configs/thresholds.json` are **PROVISIONAL ONLY**.
-Replace them after running development-set evaluation.
-
----
-
-# 5. Dataset: Vietnam-Celeb
-
-Use the official project repository:
-
-https://github.com/thanhpv2102/Vietnam-Celeb.Interspeech
-
-The official repository provides four dataset parts and these important files:
-
-- `vietnam-celeb-t.txt` — training utterance list
-- `vietnam-celeb-e.txt` — Vietnam-Celeb-E verification trials
-- `vietnam-celeb-h.txt` — Vietnam-Celeb-H verification trials
-- speaker metadata TSV
-
-For this 9-day project, start with a subset rather than all 880 training speakers.
-
-Recommended first run:
-
-- 150 speakers for fine-tuning
-- maximum 20 utterances per training speaker
-- 30 additional speaker-disjoint speakers for development / threshold selection
-
-Do **not** use the final test trials to choose thresholds.
-
----
-
-# 6. How to organize Vietnam-Celeb for the provided scripts
-
-Expected extracted structure:
+## Cấu trúc thư mục
 
 ```text
-/kaggle/input/vietnam-celeb/
-├── data/
-│   ├── speaker_001/
-│   │   ├── *.wav
-│   │   └── ...
-│   ├── speaker_002/
-│   └── ...
-├── vietnam-celeb-t.txt
-├── vietnam-celeb-e.txt
-└── vietnam-celeb-h.txt
+app/          Streamlit UI
+src/          ASR, TTS, SV/SID, router, actions và Supabase client
+training/     Chuẩn bị subset, fine-tuning, evaluation
+models/       Checkpoint Epoch 10 và cache model cục bộ
+results/      Kết quả calibration và test
+notebooks/    EDA và notebook fine-tuning cuối cùng
+supabase/     Schema và migration
+tests/        Unit tests
+docs/         Kiến trúc, bảng thí nghiệm, kịch bản demo và report outline
 ```
 
-The exact speaker IDs can be numeric; the scripts do not require the example names above.
+## Tái lập fine-tuning
 
-If Kaggle input path is different, just change the command arguments.
-
----
-
-# 7. Kaggle: prepare subset
-
-Create a Kaggle Notebook with GPU enabled, upload this project ZIP or add it as a Kaggle Dataset,
-then run a terminal cell or Python shell command equivalent to:
-
-```bash
-python training/prepare_vietnam_celeb_subset.py \
-  --data-root /kaggle/input/vietnam-celeb/data \
-  --official-train-list /kaggle/input/vietnam-celeb/vietnam-celeb-t.txt \
-  --output-dir /kaggle/working/metadata \
-  --train-speakers 150 \
-  --dev-speakers 30 \
-  --max-utts 20 \
-  --seed 42
-```
-
-Outputs:
-
-```text
-/kaggle/working/metadata/
-├── train.csv
-├── val.csv
-├── dev.csv
-└── split_summary.json
-```
-
-`dev.csv` is speaker-disjoint from the fine-tuning speakers.
-
----
-
-# 8. Kaggle: install training dependencies
-
-Kaggle usually already contains PyTorch. Install only the project dependencies needed there:
-
-```bash
-pip install -q speechbrain==1.1.0 pandas scikit-learn soundfile
-```
-
-Then check:
-
-```python
-import torch
-print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
-```
-
----
-
-# 9. Fine-tune ECAPA on Kaggle
-
-First do a short sanity run:
-
-```bash
-python training/finetune_ecapa_kaggle.py \
-  --train-csv /kaggle/working/metadata/train.csv \
-  --val-csv /kaggle/working/metadata/val.csv \
-  --output /kaggle/working/finetuned_ecapa.pt \
-  --epochs 1 \
-  --batch-size 16 \
-  --lr 1e-4
-```
-
-If that works, run the real first experiment:
-
-```bash
-python training/finetune_ecapa_kaggle.py \
-  --train-csv /kaggle/working/metadata/train.csv \
-  --val-csv /kaggle/working/metadata/val.csv \
-  --output /kaggle/working/finetuned_ecapa.pt \
-  --epochs 5 \
-  --batch-size 16 \
-  --lr 1e-4
-```
-
-Notes:
-- This starter fine-tunes the pretrained ECAPA embedding network using a new speaker-classification head.
-- The classification head uses an AAM-Softmax-style angular margin objective.
-- `1e-4`, 5 epochs, batch 16 are **project starting values**, not claimed as the original Vietnam-Celeb paper hyperparameters.
-- If GPU memory is comfortable, try batch size 32.
-- Keep the pretrained baseline; do not overwrite it.
-
----
-
-# 10. Choose the SV threshold on development speakers
-
-After training:
-
-```bash
-python training/evaluate_verification.py \
-  --dev-csv /kaggle/working/metadata/dev.csv \
-  --checkpoint /kaggle/working/finetuned_ecapa.pt \
-  --output-json /kaggle/working/sv_dev_metrics.json \
-  --max-utts-per-speaker 8 \
-  --seed 42
-```
-
-The JSON contains:
-
-- EER
-- FAR at the selected threshold
-- FRR at the selected threshold
-- selected threshold
-- number of positive/negative trials
-
-Copy the chosen value into:
-
-```text
-configs/thresholds.json
-```
-
-Do this separately for SID later; do not assume the same threshold is optimal.
-
----
-
-# 11. Bring the fine-tuned model back to VS Code
-
-Download from Kaggle:
-
-```text
-finetuned_ecapa.pt
-```
-
-Place it here:
-
-```text
-models/finetuned_ecapa.pt
-```
-
-The local `ECAPAService` detects this file automatically.
-
-Then rerun:
+Dataset Vietnam-Celeb không được đưa vào repository. Chuẩn bị audio dataset và danh sách `vietnam-celeb-t.txt`, sau đó dùng:
 
 ```powershell
-streamlit run app/main.py
+python training/prepare_vietnam_celeb_subset.py `
+  --data-root <data-root> `
+  --official-train-list <vietnam-celeb-t.txt> `
+  --output-dir metadata_v2 `
+  --train-speakers 600 `
+  --dev-speakers 50 `
+  --max-utts 20 `
+  --seed 42
 ```
 
----
+Notebook `notebooks/finetune_ecapa_colab.ipynb` là artifact thí nghiệm cuối cùng; nó chứa output split và lịch sử train/validation Epoch 1--10. Không dùng Vietnam-Celeb-E/H để chọn threshold.
 
-# 12. Important folders
+## Tài liệu bổ sung
 
-```text
-app/                    Streamlit UI
-src/speaker/            ECAPA, enrollment, SV, SID
-src/speech/             audio preprocessing, Faster-Whisper
-src/assistant/          intents, permissions, actions
-src/database/           SQLite
-training/               subset, fine-tune, evaluation
-configs/                thresholds and model settings
-scripts/                setup and smoke tests
-models/                 local fine-tuned checkpoint (not Git)
-data/                   runtime/user data (not Git)
-tests/                   lightweight unit tests
-```
+- `docs/ARCHITECTURE.md`: kiến trúc chi tiết.
+- `docs/EXPERIMENT_TABLES.md`: bảng dùng trong báo cáo.
+- `docs/DEMO_SCRIPT.md`: kịch bản demo 5--7 phút.
+- `docs/REPORT_OUTLINE.md`: dàn ý báo cáo.
+- `requirements-experiments.txt`: dependency tùy chọn cho thí nghiệm phoneme-based enrollment, không cần cho ứng dụng lõi.
 
----
+## Đóng gói nộp bài
 
-# 13. First things to test
+Đưa source code, report, checkpoint và tài liệu cần thiết vào một ZIP có tên theo mã số sinh viên. Nếu dataset hoặc checkpoint quá lớn, tải lên Google Drive và nộp file `.txt` chứa link theo đúng định dạng giảng viên yêu cầu.
 
-In this exact order:
-
-1. `python scripts/init_db.py`
-2. `python scripts/smoke_test_ecapa.py sample.wav`
-3. `streamlit run app/main.py`
-4. create two users
-5. enroll both users
-6. check SID distinguishes them
-7. check wrong speaker fails SV
-8. check Faster-Whisper returns Vietnamese transcript
-9. prepare Vietnam-Celeb subset on Kaggle
-10. run one-epoch fine-tuning sanity test
-
-Do not start phoneme-based enrollment optimization until the above path works end-to-end.
+Không đưa `.env`, `.venv/`, `__pycache__/`, `data/runtime/` hoặc cache model sinh ra khi chạy vào ZIP.
